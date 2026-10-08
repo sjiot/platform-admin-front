@@ -379,6 +379,8 @@ async function api(method, path, body){
 /* ===================== 상수 ===================== */
 var LOW_AT = 6;                         /* 이 개수 이하면 부족 */
 var KEYCAP_MAX_FALLBACK = 40, BOARD_MAX_FALLBACK = 3;
+var PAPER_MAX_FALLBACK = 900;           /* config.PAPER_MAX_COUNT — GET /admin/paper 가 max 를 주면 그 값을 쓴다 */
+var PAPER_LOW_RATIO = 0.12;             /* 남은 용지가 최대치의 12% 이하면 부족 (900매 기준 108매) */
 var CNAME = {r:'레드', y:'옐로', g:'그린', b:'블루'};
 var CHEX  = {r:'#e0443a', y:'#f1c33c', g:'#3ba268', b:'#3b76e8'};
 var CFG   = {r:'#fff', y:'#4a3a05', g:'#fff', b:'#fff'};
@@ -468,7 +470,7 @@ var S = {
   tab:'orders',
   orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, board:{}, boardMax:{}, faults:[], line:null,
   loaded:{}, err:{},
-  printer:{name:'키오스크', qty:900, cap:900, lastAt:'-'},   /* 백엔드 미연동 — 이 브라우저에만 있는 값 */
+  paper:{remaining:null, max:null, refilledAt:null, localAt:null},   /* GET /admin/paper · localAt = 이 브라우저에서 채운 시각 */
   log:[], paperLog:[],
   query:'', filter:'전체', sel:[], detailId:null, detailEnter:false, receiptId:null,
   dialog:null,
@@ -489,7 +491,23 @@ function keyMax(k){ return S.stockMax[k] || KEYCAP_MAX_FALLBACK; }
 function boardMax(c){ return S.boardMax[c] || BOARD_MAX_FALLBACK; }
 function boardTotal(){ return COLORS.reduce(function(a, c){ return a + (S.board[c] || 0); }, 0); }
 function boardCap(){ return COLORS.reduce(function(a, c){ return a + boardMax(c); }, 0); }
-function paperLow(){ return S.printer.qty === 0 || S.printer.qty / S.printer.cap <= 0.12; }
+function paperMax(){ return S.paper.max || PAPER_MAX_FALLBACK; }
+function paperLow(){ var n = S.paper.remaining; return n != null && (n === 0 || n / paperMax() <= PAPER_LOW_RATIO); }
+function fmtWhen(iso){ return iso && iso.length >= 16 ? iso.slice(5, 10).replace('-', '/') + ' ' + iso.slice(11, 16) : '-'; }
+function localIso(){ var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+
+/* 용지 마지막 채움 시각·내역은 서버에 없어서 프론트 기준으로 이 브라우저에 저장한다 (다른 PC에서 채운 건 모른다).
+   최대치는 PAPER_MAX_FALLBACK(900). 서버가 max·refilled_at 을 주기 시작하면 그 값이 우선한다. */
+var PAPER_STORE_KEY = 'sjiot-admin:paper';
+function paperStoreLoad(){
+  try {
+    var v = JSON.parse(localStorage.getItem(PAPER_STORE_KEY) || 'null');
+    if(v){ S.paper.localAt = v.at || null; S.paperLog = Array.isArray(v.log) ? v.log.slice(0, 8) : []; }
+  } catch(e) {}
+}
+function paperStoreSave(){
+  try { localStorage.setItem(PAPER_STORE_KEY, JSON.stringify({at:S.paper.localAt, log:S.paperLog})); } catch(e) {}
+}
 function callCount(){ return Object.keys(S.calls).length; }
 
 /* fault_section(part[:scope[:slot]]) → 도면 파트 */
@@ -637,14 +655,21 @@ async function loadFaults(){
   });
 }
 async function loadLine(){ S.line = await api('GET', '/admin/line'); }
+/* 영수증 용지 — 남은 매수 = 최대치 - 마지막 채우기 이후 접수된 주문 수 (주문 1건 = 1매, 차감은 POST /order 가 한다) */
+async function loadPaper(){
+  var d = await api('GET', '/admin/paper');
+  S.paper.remaining = typeof d.remaining === 'number' ? d.remaining : null;
+  S.paper.max = typeof d.max === 'number' ? d.max : null;        /* 서버가 아직 안 주면 PAPER_MAX_FALLBACK */
+  S.paper.refilledAt = d.refilled_at || null;                    /* 서버가 아직 안 주면 이 브라우저에서 채운 시각만 보인다 */
+}
 
-var SOURCES = {orders:loadOrders, stations:loadStations, calls:loadCalls, stock:loadStock, faults:loadFaults, line:loadLine};
-var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','stock'], paper:[], ops:['line'], guide:[]};
-var HEADER_SOURCES = ['calls','line','stock'];
+var SOURCES = {orders:loadOrders, stations:loadStations, calls:loadCalls, stock:loadStock, faults:loadFaults, line:loadLine, paper:loadPaper};
+var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','stock'], paper:['paper'], ops:['line'], guide:[]};
+var HEADER_SOURCES = ['calls','line','stock','paper'];
 var refreshing = false;
 
-/* 갱신 간격. 서버는 sync 워커 1개이고 요청마다 Redis 명령이 여러 개 나간다 (orders 10 · line 8 · faults 9 · stations 7 · calls 5 · stock 1).
-   보는 탭만 10초, 헤더(호출·영업 상태·재고)는 30초, 전체는 60초. 탭이 숨겨져 있으면 쉰다. */
+/* 갱신 간격. 서버는 sync 워커 1개이고 요청마다 Redis 명령이 여러 개 나간다 (orders 10 · line 8 · faults 9 · stations 7 · calls 5 · stock 1 · paper 1).
+   보는 탭만 10초, 헤더(호출·영업 상태·재고·용지)는 30초, 전체는 60초. 탭이 숨겨져 있으면 쉰다. */
 var POLL_TAB_MS = 10000, POLL_HEADER_MS = 30000, POLL_ALL_MS = 60000;
 var lastHeaderAt = 0, lastAllAt = 0, lastAnyAt = 0;
 
@@ -1010,33 +1035,42 @@ function viewWarehouse(){
   '</div>';
 }
 
-/* ===================== 탭 5: 영수증 용지 (백엔드 미연동) ===================== */
+/* ===================== 탭 5: 영수증 용지 (GET /admin/paper · POST /admin/paper/refill) ===================== */
 function viewPaper(){
-  var p = S.printer, pct = Math.round(p.qty / p.cap * 100), out = p.qty === 0, lowP = paperLow();
-  return '<div class="wrap" style="max-width:900px">' +
-    '<div class="alert warn"><div class="t"><span>⚠</span>백엔드 미연동</div><div style="font-size:12px;color:var(--warn-ink)">용지·프린터 API가 없어서 이 화면의 수치는 이 브라우저에만 있는 값입니다. 새로고침하면 초기화됩니다.</div></div>' +
+  var p = S.paper, n = p.remaining, cap = paperMax();
+  var logCard = '<div class="card" style="padding:14px 15px;display:flex;flex-direction:column;gap:6px">' +
+      '<div style="font-size:12.5px;font-weight:600;color:var(--slate)">용지 채움 내역 <span style="font-weight:400;color:var(--faint)">· 이 브라우저 기록</span></div>' +
+      (S.paperLog.length
+        ? S.paperLog.map(function(e){ return '<div class="logrow"><span class="mono" style="color:var(--faint)">' + e.time + '</span><span>' + esc(e.text) + '</span></div>'; }).join('')
+        : '<div style="font-size:12px;color:var(--faint)">이 브라우저에서 채운 기록이 없습니다.</div>') +
+    '</div>';
+  if(n == null){
+    return '<div class="wrap" style="max-width:900px">' + errBox(['paper']) +
+      '<div class="sechead"><h2>영수증 용지</h2><span class="note">키오스크 1대</span></div>' +
+      '<div class="empty">' + (S.err.paper ? '용지 정보를 읽지 못했습니다.' : '불러오는 중…') + '</div>' +
+      logCard + '</div>';
+  }
+  var pct = Math.max(0, Math.min(100, Math.round(n / cap * 100))), out = n === 0, lowP = paperLow();
+  var last = p.refilledAt ? fmtWhen(p.refilledAt) : (p.localAt ? fmtWhen(p.localAt) + ' (이 브라우저)' : '-');
+  return '<div class="wrap" style="max-width:900px">' + errBox(['paper']) +
     (lowP ? '<div class="alert"><div class="t"><span>⚠</span>영수증 용지 부족</div><div class="tags">' +
-      '<span class="tag">' + p.name + ' · ' + (out ? '용지 소진' : p.qty + '매 남음') + '</span></div></div>' : '') +
-    '<div class="sechead"><h2>영수증 용지</h2><span class="note">키오스크 1대 · ' + p.qty + '매 남음</span></div>' +
+      '<span class="tag">키오스크 · ' + (out ? '용지 소진' : n + '매 남음') + '</span></div></div>' : '') +
+    '<div class="sechead"><h2>영수증 용지</h2><span class="note">키오스크 1대 · ' + n + '매 남음</span></div>' +
     '<div style="display:grid;grid-template-columns:minmax(250px,340px);gap:14px">' +
       '<div class="card stcard' + (out ? ' help' : '') + '">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
-          '<div style="font-size:15px;font-weight:700">' + p.name + '</div>' +
+          '<div style="font-size:15px;font-weight:700">키오스크</div>' +
           '<span class="badge' + (lowP ? '' : ' n') + '" style="' + (lowP ? '' : 'background:var(--ok-soft);color:var(--ok-ink)') + '">' + (out ? '용지 소진' : (lowP ? '부족' : '정상')) + '</span></div>' +
         '<div style="display:flex;align-items:flex-end;gap:6px">' +
-          '<span class="mono" style="font-size:26px;font-weight:700;line-height:1;color:' + (lowP ? 'var(--danger-btn-fg)' : 'var(--navy)') + '">' + p.qty + '</span>' +
-          '<span style="font-size:12px;color:var(--faint-2)">/ ' + p.cap + '매</span></div>' +
+          '<span class="mono" style="font-size:26px;font-weight:700;line-height:1;color:' + (lowP ? 'var(--danger-btn-fg)' : 'var(--navy)') + '">' + n + '</span>' +
+          '<span style="font-size:12px;color:var(--faint-2)">/ ' + cap + '매</span></div>' +
         '<div class="meter"><i style="width:' + pct + '%;background:' + (out ? 'var(--danger)' : (lowP ? 'var(--warn)' : 'var(--ok)')) + '"></i></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--muted)">마지막 교체</span><span class="mono">' + p.lastAt + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--muted)">마지막 채움</span><span class="mono">' + esc(last) + '</span></div>' +
       '</div></div>' +
+    '<p style="margin:0;font-size:12px;color:var(--muted);max-width:640px">남은 용지는 프린터 센서 값이 아니라 <b>최대 ' + cap + '매 − 마지막 채우기 이후 접수된 주문 수</b>입니다 (주문 1건 = 1매). 접수에 실패한 주문(대기열 가득·접수 마감)은 빼고, 중단·노쇼 주문은 셉니다. 출력 실패나 재출력은 반영되지 않고, 리셋해도 값은 유지됩니다.</p>' +
     '<button class="btn' + (lowP ? ' danger' : '') + '" data-act="fill-paper" type="button" style="height:40px;max-width:340px;font-size:13px;font-weight:600">' +
       (lowP ? '용지 부족 · 용지 채우기' : '용지 채우기') + '</button>' +
-    '<div class="card" style="padding:14px 15px;display:flex;flex-direction:column;gap:6px">' +
-      '<div style="font-size:12.5px;font-weight:600;color:var(--slate)">용지 교체 내역</div>' +
-      (S.paperLog.length
-        ? S.paperLog.map(function(e){ return '<div class="logrow"><span class="mono" style="color:var(--faint)">' + e.time + '</span><span>' + esc(e.text) + '</span></div>'; }).join('')
-        : '<div style="font-size:12px;color:var(--faint)">아직 교체 내역이 없습니다.</div>') +
-    '</div></div>';
+    logCard + '</div>';
 }
 
 /* ===================== 탭 6: 운영 (영업 상태 · 리셋 · 스냅샷) ===================== */
@@ -1138,18 +1172,20 @@ function viewGuide(){
     ['조립대 상태', 'GET /admin/stations · GET /admin/calls', 'POST /admin/station/&lt;sid&gt;/call/ok · …/call (테스트) · abort 🔒'],
     ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill'],
     ['창고 상태', 'GET /admin/faults · GET /admin/stock', 'POST /admin/order/&lt;id&gt;/fault/clear 🔒 · abort 🔒'],
+    ['영수증 용지', 'GET /admin/paper', 'POST /admin/paper/refill'],
     ['운영', 'GET /admin/line · GET /admin/debug/snapshot', 'POST /admin/line 🔒 · POST /admin/reset 🔒'],
-    ['헤더', 'GET /admin/calls · /admin/line · /admin/stock', '영업 상태 칩 → POST /admin/line 🔒']
+    ['헤더', 'GET /admin/calls · /admin/line · /admin/stock · /admin/paper', '영업 상태 칩 → POST /admin/line 🔒']
   ].map(function(r){ return '<tr><td style="font-weight:600">' + r[0] + '</td><td class="mono" style="font-size:11.5px">' + r[1] + '</td><td class="mono" style="font-size:11.5px">' + r[2] + '</td></tr>'; }).join('');
   return '<div class="wrap doc">' +
   '<div><div class="eyebrow">admin.py 연동</div>' +
   '<h2 style="font-size:22px;margin-top:6px">탭별 API</h2>' +
-  '<p class="lede">🔒 표시는 관리자 비밀번호(<code>STATION_RESET_PASSWORD</code>)가 필요한 동작입니다. 확인 창에서 한 번 입력하면 이 탭을 닫을 때까지 기억합니다. 데이터는 보고 있는 탭을 10초마다, 헤더(도움 요청·영업 상태·재고)는 30초마다, 전체는 60초마다 다시 읽습니다. 브라우저 탭이 가려져 있으면 읽지 않습니다. 조작 직후에는 바로 전체를 다시 읽습니다.</p></div>' +
+  '<p class="lede">🔒 표시는 관리자 비밀번호(<code>STATION_RESET_PASSWORD</code>)가 필요한 동작입니다. 확인 창에서 한 번 입력하면 이 탭을 닫을 때까지 기억합니다. 데이터는 보고 있는 탭을 10초마다, 헤더(도움 요청·영업 상태·재고·용지)는 30초마다, 전체는 60초마다 다시 읽습니다. 브라우저 탭이 가려져 있으면 읽지 않습니다. 조작 직후에는 바로 전체를 다시 읽습니다.</p></div>' +
   '<div class="card tablebox" style="margin-top:11px"><table style="min-width:640px"><thead><tr><th>탭</th><th>읽기</th><th>쓰기</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
 
   '<h2>연동되지 않은 것</h2>' +
   '<ul>' +
-    '<li><b>영수증 용지 · 영수증 출력</b> — 백엔드에 용지·프린터 API가 없습니다. 용지 탭은 이 브라우저에만 있는 값이고, 출력 버튼은 꺼 두었습니다.</li>' +
+    '<li><b>영수증 출력</b> — 프린터로 출력 명령을 보내는 API가 없습니다. 영수증 창의 출력 버튼은 꺼 두었습니다. (용지 잔량은 연동됨 — 아래 표시 규칙)</li>' +
+    '<li><b>용지 최대치 · 마지막 채움 시각</b> — 서버에 없어 프론트 기준으로 둡니다. 최대치는 900매 고정, 마지막 채움 시각과 채움 내역은 이 브라우저에 저장합니다 (다른 PC에서 채운 건 모릅니다). 서버가 <code>max</code>·<code>refilled_at</code>을 주기 시작하면 그 값이 우선합니다.</li>' +
     '<li><b>AGV 긴급정지</b> — AGV로 정지 명령을 보내는 경로가 없습니다. 눌러도 아무 일이 안 일어나는 비상 버튼은 위험해서 비활성으로 두었습니다.</li>' +
     '<li><b>테스트 fault 주입 · 전체 해제</b> — API가 없어 뺐습니다.</li>' +
     '<li><b>진행 주문 없이 죽은 칸·선반</b> — fault가 주문에 붙는 구조라 표시되지 않습니다.</li>' +
@@ -1163,6 +1199,7 @@ function viewGuide(){
     '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 40 · 보드 3 (서버 <code>config</code> 값).</li>' +
     '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
+    '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
   '</ul>' +
 
   '<h2>fault ↔ 위치</h2>' +
@@ -1180,7 +1217,7 @@ function renderHeader(){
   var errs = Object.keys(S.err).filter(function(k){ return S.err[k]; });
   if(errs.length) h += '<div class="chip-alert" title="' + esc(errs.map(function(k){ return k + ': ' + S.err[k]; }).join('\n')) + '">연결 오류 ' + errs.length + '</div>';
   if(lows) h += '<div class="chip-alert"><span class="dot"></span>재고 부족 ' + lows + '건</div>';
-  if(paperLow()) h += '<div class="chip-alert">용지 부족</div>';
+  if(paperLow()) h += '<div class="chip-alert">' + (S.paper.remaining === 0 ? '용지 소진' : '용지 부족 · ' + S.paper.remaining + '매') + '</div>';
   if(help) h += '<div class="chip-alert solid"><span class="dot" style="background:#fff"></span>도움 요청 ' + help + '건</div>';
   document.getElementById('hdrAlerts').innerHTML = h;
 
@@ -1399,16 +1436,20 @@ var ASK = {
     abortDialog({id:s.order.order_id, seq:s.order.order_seq, stage:s.order.stage, sid:sid});
   },
   fillPaper: function(){
-    var p = S.printer;
-    ask({title: '영수증 용지 채우기 · 미연동',
-      body: '키오스크 용지를 ' + p.cap + '매(가득)로 기록합니다. 서버에는 저장되지 않고 이 브라우저에만 남습니다.',
-      kv: [['현재', p.qty + ' / ' + p.cap + '매'], ['교체 후', p.cap + ' / ' + p.cap + '매']],
+    var cur = S.paper.remaining, cap = paperMax(), curTxt = cur != null ? String(cur) : '?';
+    ask({title: '영수증 용지 채우기',
+      body: '키오스크 프린터에 용지를 가득 넣었으면 확인을 누르세요. 서버의 남은 용지가 <b>' + cap + '매</b>로 돌아갑니다.<br>대기번호·주문 통계는 바뀌지 않습니다.',
+      kv: [['현재', curTxt + ' / ' + cap + '매'], ['채운 뒤', cap + ' / ' + cap + '매']],
       ok: '채우기 완료',
       run: async function(){
-        var t = now();
-        S.paperLog = [{time:t, text:p.name + ' 용지 채움 · ' + p.qty + ' → ' + p.cap + '매'}].concat(S.paperLog).slice(0, 8);
-        S.printer = Object.assign({}, p, {qty:p.cap, lastAt:t});
-        say('키오스크 용지 채움 (로컬 기록)');
+        var r = await api('POST', '/admin/paper/refill');
+        var at = localIso();
+        S.paperLog = [{time:fmtWhen(at), text:'용지 채움 · ' + curTxt + ' → ' + r.remaining + '매'}].concat(S.paperLog).slice(0, 8);
+        S.paper.remaining = r.remaining;
+        S.paper.localAt = at;
+        if(r.refilled_at) S.paper.refilledAt = r.refilled_at;
+        paperStoreSave();
+        say('영수증 용지 채움 · ' + r.remaining + '매');
       }});
   },
   resolveFault: function(id){
@@ -1614,6 +1655,7 @@ document.addEventListener('keydown', function(ev){
 /* ===================== 시작 ===================== */
 function clockTick(){ document.getElementById('clock').textContent = now(); }
 clockTick(); setInterval(clockTick, 10000);
+paperStoreLoad();
 render();
 refresh(2);
 setInterval(function(){
