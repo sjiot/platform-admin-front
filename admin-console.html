@@ -1,0 +1,1632 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<title>딸깍 키링 관제 콘솔</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* 단일 라이트 테마 — 기존 Admin Console 팔레트 그대로 */
+:root{
+  color-scheme:light;
+  --ground:#eceff4; --surface:#ffffff; --surface-2:#f7f9fc; --surface-3:#fbfcfe;
+  --line:#dfe4ec; --line-2:#e6eaf1; --line-soft:#f0f2f7; --line-hair:#eef1f6;
+  --ink:#1b2130; --navy:#16233c; --slate:#46506b; --muted:#6b7488; --faint:#98a2b5; --faint-2:#8b94a7;
+  --primary:#2f6df6; --primary-soft:#e8f0ff; --primary-ink:#2f5fd0; --ring:rgba(47,109,246,.42);
+  --danger:#d9463a; --danger-ink:#b03a2b; --danger-deep:#a5301f; --danger-soft:#fdf5f3; --danger-soft-2:#fef4f3;
+  --danger-line:#e8a79c; --danger-line-2:#f6cfc9; --danger-btn-line:#f0b6ae; --danger-btn-fg:#c0392b;
+  --warn:#e79a2b; --warn-ink:#9a6412; --warn-soft:#fff4e2; --warn-line:#f0d9ad;
+  --ok:#3ba268; --ok-ink:#1f7a4d; --ok-soft:#e8f6ed;
+  --rail:#c3ccdb; --rail-body:#f2f5fa;
+  --cap-r:#e0443a; --cap-y:#f1c33c; --cap-g:#3ba268; --cap-b:#3b76e8;
+  --sans:"IBM Plex Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+#app{display:flex;flex-direction:column;height:100%;min-height:0}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#cfd6e2;border-radius:6px;border:3px solid transparent;background-clip:content-box}
+
+/* ---------- shell ---------- */
+header.bar{flex:none;min-height:52px;background:var(--navy);color:#fff;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 18px}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .mark{width:22px;height:22px;border-radius:5px;background:var(--primary);display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff}
+.brand .name{font-weight:600;letter-spacing:.09em;font-size:12.5px}
+.vr{width:1px;height:18px;background:rgba(255,255,255,.18)}
+.sub{font-size:12px;color:#9fb0cc}
+.spacer{flex:1}
+.chip-alert{display:flex;align-items:center;gap:6px;background:rgba(232,68,58,.16);border:1px solid rgba(232,68,58,.45);color:#ff9d95;padding:5px 10px;border-radius:6px;font-size:11.5px;font-weight:500;white-space:nowrap}
+.chip-alert.solid{background:rgba(217,70,58,.9);border-color:transparent;color:#fff;font-weight:600}
+.dot{width:6px;height:6px;border-radius:50%;background:#ff6b5e;animation:pulse 1.6s infinite;flex:none}
+.btn-agv{cursor:pointer;height:30px;padding:0 13px;border-radius:6px;font-size:11.5px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.clock{font-family:var(--mono);font-size:12px;color:#c6d3e6}
+nav.tabs{flex:none;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:stretch;padding:0 18px;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+.tab{border:none;background:none;cursor:pointer;padding:0 15px;min-height:44px;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent}
+.tab[aria-selected="true"]{color:var(--navy);font-weight:600;border-bottom-color:var(--primary)}
+.tab .pill{font-family:var(--mono);font-size:11px;background:#f2f4f8;color:var(--faint-2);padding:1px 6px;border-radius:9px}
+.tab[aria-selected="true"] .pill{background:var(--primary-soft);color:var(--primary-ink)}
+.banner{flex:none;background:var(--danger);color:#fff;padding:9px 18px;display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600}
+.body{flex:1;min-height:0;display:flex;align-items:stretch}
+main{flex:1;min-width:0;overflow-y:auto;padding:18px 18px 36px}
+.wrap{display:flex;flex-direction:column;gap:14px}
+.wrap.narrow{max-width:1000px}
+.wrap.doc{max-width:760px}
+
+/* ---------- primitives ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:9px}
+.sechead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.sechead h2{margin:0;font-size:14px;font-weight:600}
+.sechead .note{font-size:12px;color:var(--muted)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+.alert{border-radius:9px;padding:13px 15px;display:flex;flex-direction:column;gap:7px;background:var(--danger-soft-2);border:1px solid var(--danger-line-2)}
+.alert .t{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--danger-ink)}
+.alert.warn{background:var(--warn-soft);border-color:var(--warn-line)}
+.alert.warn .t{color:var(--warn-ink)}
+.alert.good{background:var(--ok-soft);border-color:#bfe3cd}
+.alert.good .t{color:var(--ok-ink)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{background:var(--surface);border:1px solid #f0d3ce;border-radius:6px;padding:4px 9px;font-size:11.5px;color:#7d4237}
+.tag.n{border-color:var(--line);color:var(--muted)}
+.btn{cursor:pointer;height:32px;padding:0 13px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--slate);font-size:12.5px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--primary);color:var(--primary)}
+.btn.primary{border-color:transparent;background:var(--primary);color:#fff;font-weight:600}
+.btn.primary:hover{color:#fff;filter:brightness(1.07)}
+.btn.danger{border-color:transparent;background:var(--danger);color:#fff;font-weight:600}
+.btn.danger:hover{color:#fff;filter:brightness(1.07)}
+.btn.ghostdanger{border-color:var(--danger-btn-line);color:var(--danger-btn-fg)}
+.btn.ghostdanger:hover{border-color:var(--danger);color:var(--danger)}
+.btn.sm{height:28px;padding:0 11px;font-size:11.5px}
+.meter{height:5px;border-radius:3px;background:var(--line-hair);overflow:hidden}
+.meter>i{display:block;height:100%;background:var(--ok)}
+
+/* ---------- 창고 도면 ---------- */
+.mapbox{padding:16px;overflow-x:auto}
+.map{min-width:660px;display:flex;flex-direction:column;gap:14px}
+.maplane{border:1px dashed var(--line);border-radius:9px;padding:13px;display:flex;flex-direction:column;gap:11px;background:var(--surface-3)}
+.lanetag{display:flex;align-items:center;gap:8px}
+.lanetag b{font-size:12px;font-weight:600;color:var(--muted)}
+.lanetag span{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.gridA{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.gridB{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:10px;align-items:center}
+.part{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:7px;text-align:left;width:100%;transition:border-color .12s,background .12s}
+.part:hover{border-color:var(--primary)}
+.part .ptop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.part .pid{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.part .pname{font-size:12.5px;font-weight:600;color:var(--navy)}
+.part .pstat{font-size:11px;color:var(--ok-ink);background:var(--ok-soft);border-radius:5px;padding:2px 7px;white-space:nowrap}
+.part.bad{border-color:var(--danger-line);background:var(--danger-soft)}
+.part.bad .pname{color:var(--danger-deep)}
+.part.bad .pstat{color:#fff;background:var(--danger);font-weight:600}
+.part.belt{padding:8px 11px}
+.beltline{position:relative;height:16px;border-radius:5px;background:var(--rail-body);border:1px solid var(--line-hair);overflow:hidden}
+.beltline::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(115deg,var(--rail) 0 3px,transparent 3px 11px);opacity:.75}
+.part.bad .beltline{background:var(--surface);border-color:var(--danger-line)}
+.part.bad .beltline::after{background:repeating-linear-gradient(115deg,var(--danger) 0 3px,transparent 3px 11px);opacity:.85}
+.arm{width:118px}
+.armglyph{height:34px;border-radius:8px;border:1px solid var(--line-hair);background:var(--rail-body);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.part.bad .armglyph{background:var(--surface);border-color:var(--danger-line);color:var(--danger-ink)}
+.pips{display:flex;flex-direction:column;gap:4px}
+.piprow{display:flex;align-items:center;gap:4px}
+.piprow .lt{font-family:var(--mono);font-size:10.5px;width:11px;color:var(--muted);font-weight:600}
+.pip{width:15px;height:15px;border-radius:4px;border:1px solid rgba(0,0,0,.12)}
+.pip.out{outline:2px solid var(--danger);outline-offset:1px}
+.pip.low{outline:2px solid var(--warn);outline-offset:1px}
+.bay{min-width:104px}
+.bayglyph{height:34px;border-radius:8px;border:1px dashed var(--line);display:grid;place-items:center;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.part.bad .bayglyph{border-color:var(--danger-line);border-style:solid;color:var(--danger-ink)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:var(--muted);align-items:center}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes locatePulse{from{box-shadow:0 0 0 0 var(--ring)}to{box-shadow:0 0 0 9px transparent}}
+@keyframes toastin{from{transform:translate(-50%,10px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+@keyframes slidein{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.is-locating{animation:locatePulse .5s ease-out 3;border-color:var(--primary)!important}
+tr.is-locating td{background:var(--primary-soft)}
+@media (prefers-reduced-motion:reduce){.is-locating{animation:none;box-shadow:0 0 0 3px var(--ring)}.dot{animation:none}}
+
+/* ---------- tables ---------- */
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th{text-align:left;font-size:11.5px;font-weight:500;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--line-2);padding:10px 14px;white-space:nowrap}
+td{border-bottom:1px solid var(--line-soft);padding:10px 14px;font-size:12.5px;vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover td{background:var(--surface-2)}
+tr.sel td{background:#fafbfe}
+tr.open td{background:#f4f8ff}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:5px;font-size:11.5px;font-weight:500;white-space:nowrap;background:#fdecea;color:var(--danger-ink)}
+.badge.n{background:var(--surface-2);color:var(--muted)}
+.actor{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-family:var(--mono);white-space:nowrap;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.actor.agv{background:var(--primary-soft);color:var(--primary-ink);border-color:transparent}
+.actor.plat{background:var(--warn-soft);color:var(--warn-ink);border-color:var(--warn-line)}
+.empty{padding:34px;text-align:center;color:var(--faint);font-size:12.5px}
+.captile{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:10.5px;font-weight:700;font-family:var(--mono);border:1px solid rgba(0,0,0,.09)}
+.sw{border-radius:4px;border:1px solid rgba(0,0,0,.11);flex:none}
+
+/* ---------- 창고 재고 ---------- */
+.zonegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:820px){.zonegrid{grid-template-columns:minmax(0,1fr)}}
+.zonecard{display:flex;flex-direction:column}
+.zonehead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 13px;border-bottom:1px solid var(--line-soft);background:var(--surface-2);border-radius:9px 9px 0 0}
+.zonehead .z{font-size:12.5px;font-weight:600;color:var(--navy)}
+.zonehead .l{font-family:var(--mono);font-size:12px;color:var(--primary-ink);background:var(--primary-soft);border-radius:5px;padding:1px 7px}
+.zonehead .b{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-left:auto}
+.cartgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-soft);border-radius:0 0 9px 9px;overflow:hidden}
+@media (max-width:480px){.cartgrid{grid-template-columns:repeat(2,1fr)}}
+.cart{background:var(--surface);border:none;cursor:pointer;padding:9px 8px;display:flex;flex-direction:column;gap:6px;text-align:left;font:inherit}
+.cart:hover{background:var(--surface-2)}
+.cart .cid{display:flex;align-items:center;gap:5px}
+.cart .cname{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cart .cqty{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--navy);letter-spacing:-.02em}
+.cart .cqty s{text-decoration:none;font-size:10.5px;font-weight:400;color:var(--faint)}
+.cart.low .cqty{color:var(--warn-ink)} .cart.low .meter>i{background:var(--warn)}
+.cart.out{background:var(--danger-soft)} .cart.out .cqty{color:var(--danger-btn-fg)} .cart.out .meter>i{background:var(--danger)}
+.rack{display:flex;flex-direction:column;padding:4px 14px 10px}
+.boardrow{display:grid;grid-template-columns:22px 1fr 68px 96px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line-soft)}
+.rack .boardrow:first-child{border-top:none}
+@media (max-width:480px){.boardrow{grid-template-columns:22px 1fr 60px;row-gap:6px}.boardrow .btn{grid-column:2/-1;justify-self:start}}
+.logrow{display:flex;gap:12px;font-size:12px;color:var(--slate);padding:7px 0;border-bottom:1px solid var(--line-soft)}
+.logrow:last-child{border-bottom:none}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.field{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:0 10px;height:32px}
+.field input,.field select{border:none;outline:none;background:none;font-size:12.5px;min-width:0}
+.field select{cursor:pointer}
+.chipbtn{cursor:pointer;height:32px;padding:0 12px;border-radius:7px;font-size:12.5px;border:1px solid var(--line);background:var(--surface);color:var(--slate)}
+.chipbtn[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:500}
+
+/* ---------- 조립대 / 용지 ---------- */
+.cards3{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,320px));gap:14px}
+.stcard{padding:16px;display:flex;flex-direction:column;gap:14px}
+.stcard.help{background:#fdf5f3;border-color:var(--danger-line)}
+.big{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.01em}
+.helpbox{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid #f0c9c2;border-radius:8px;padding:11px 12px}
+
+/* ---------- 상세 패널 ---------- */
+aside.detail{width:336px;flex:none;background:var(--surface);border-left:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:16px;animation:slidein .18s ease-out;overflow-y:auto}
+aside.detail .dl{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;gap:10px}
+aside.detail .dl>span:first-child{color:var(--muted)}
+.steplist{display:flex;flex-direction:column;gap:5px}
+.step{min-height:32px;padding:0 10px;border-radius:7px;font-size:12px;font-weight:500;display:flex;align-items:center;gap:8px;border:1px solid var(--line-hair);background:var(--surface-3);color:var(--faint);text-align:left;user-select:none}
+.step .code{font-family:var(--mono);font-size:10px;opacity:.6}
+.step.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.ro{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--slate)}
+.ro em{font-style:normal;font-weight:400;font-size:10.5px;letter-spacing:.04em;color:var(--faint);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+/* 단계 표시 — 구간 칩 + 단계명 */
+.stagecell{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.phasechip{display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.stagename{font-size:12px;color:var(--ink)}
+.stagename.abn{color:var(--danger-ink);font-weight:600}
+.stagename.abn::before{content:"⚠ ";font-size:10px}
+/* 상세 패널 사다리 — 구간별 접기 */
+.ladder{display:flex;flex-direction:column;gap:6px}
+.phase{border:1px solid var(--line-hair);border-radius:8px;background:var(--surface-3);overflow:hidden}
+.phase.cur{border-color:var(--line);background:var(--surface)}
+.phase.cur.abn{border-color:var(--danger-line);background:var(--danger-soft)}
+.phasehead{display:flex;align-items:center;gap:8px;padding:9px 10px;width:100%;border:none;background:none;font:inherit;text-align:left;cursor:pointer}
+.phasehead .mk{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;line-height:1;flex:none;background:var(--line-hair);color:var(--faint)}
+.phasehead .mk.done{background:var(--ok-soft);color:var(--ok-ink)}
+.phasehead .mk.cur{background:var(--navy);color:#fff}
+.phasehead .mk.cur.abn{background:var(--danger);color:#fff}
+.phasehead .nm{font-size:12px;font-weight:600;color:var(--muted)}
+.phase.cur .phasehead .nm{color:var(--navy)}
+.phasehead .ct{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.phasebody{display:flex;flex-direction:column;gap:3px;padding:0 10px 10px}
+.st{display:flex;align-items:center;gap:8px;min-height:28px;padding:0 9px;border-radius:6px;font-size:11.5px;color:var(--faint);border:1px solid transparent}
+.st .c{font-family:var(--mono);font-size:9.5px;opacity:.7}
+.st.done{color:var(--slate);background:var(--surface-2)}
+.st.now{background:var(--navy);color:#fff;font-weight:600}
+.st.now .c{opacity:.75}
+.st.now.abn{background:var(--danger)}
+.st.abn:not(.now){color:var(--danger-ink);border-color:var(--danger-line);border-style:dashed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid4{display:flex;gap:6px}
+.grid4 .step{flex:1;justify-content:center;font-family:var(--mono)}
+@media (max-width:900px){
+  .body{flex-direction:column}
+  aside.detail{width:auto;border-left:none;border-top:1px solid var(--line);animation:none}
+}
+
+/* ---------- doc ---------- */
+.doc h2{margin:26px 0 0;font-size:17px;font-weight:600;letter-spacing:-.015em;text-wrap:balance}
+.doc h2:first-child{margin-top:0}
+.doc h3{margin:18px 0 0;font-size:13.5px;font-weight:600;color:var(--navy)}
+.doc p{margin:9px 0 0;font-size:13.5px;line-height:1.75;max-width:68ch}
+.doc ul{margin:9px 0 0;padding-left:19px;display:flex;flex-direction:column;gap:6px}
+.doc li{font-size:13.5px;line-height:1.7}
+.doc code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--line-hair);border-radius:4px;padding:1px 5px}
+.doc pre{margin:11px 0 0;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:13px 14px;overflow-x:auto}
+.doc pre code{background:none;border:none;padding:0;font-size:12px;line-height:1.65;display:block;white-space:pre}
+.doc hr{border:none;border-top:1px solid var(--line);margin:26px 0 0}
+.lede{font-size:14px;color:var(--muted);line-height:1.7;max-width:64ch}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
+@media (max-width:640px){.ba{grid-template-columns:1fr}}
+.ba>div{border:1px solid var(--line);border-radius:9px;padding:12px 13px;background:var(--surface)}
+.ba .h{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--faint);margin-bottom:7px}
+.ba ul{margin:0;padding-left:17px}
+.ba li{font-size:12.5px;line-height:1.6}
+.ba .after{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+
+/* ---------- overlays ---------- */
+.scrim{position:fixed;inset:0;background:rgba(16,23,38,.42);display:grid;place-items:center;z-index:60;padding:20px}
+.modal{width:min(372px,100%);background:var(--surface);border-radius:11px;padding:22px;box-shadow:0 18px 46px rgba(16,23,38,.28);display:flex;flex-direction:column;gap:8px}
+.modal h3{margin:0;font-size:15px;font-weight:700}
+.modal p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+.kv{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;padding:11px 12px;margin-top:3px}
+.kv div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-family:var(--mono);text-align:right}
+.modal .acts{display:flex;gap:8px;margin-top:10px}
+.modal .acts .btn{flex:1;height:34px}
+.receipt{width:min(320px,100%);background:var(--surface);border-radius:12px;padding:24px;box-shadow:0 18px 46px rgba(16,23,38,.3);display:flex;flex-direction:column;gap:18px}
+.dashed{display:flex;flex-direction:column;gap:11px;padding:15px 0;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
+.qr{display:grid;grid-template-columns:repeat(21,1fr);width:168px;height:168px;padding:9px;background:#fff;border:1px solid var(--line-2);border-radius:8px;box-sizing:content-box}
+.xbtn{cursor:pointer;width:27px;height:27px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:13px;flex:none}
+.spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--line-2);border-top-color:var(--primary);animation:spin .8s linear infinite}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(22,35,60,.28);animation:toastin .18s ease-out;z-index:80;max-width:calc(100% - 32px);text-align:center}
+/* ---------- API 연동 추가분 ---------- */
+.btn:disabled,.btn-agv:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn:disabled:hover{border-color:var(--line);color:var(--slate)}
+.btn.primary:disabled:hover,.btn.danger:disabled:hover{color:#fff}
+.chip-line{cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;font-size:11.5px;font-weight:600;white-space:nowrap;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#dbe5f5;font-family:inherit}
+.chip-line.open{background:rgba(59,162,104,.22);border-color:rgba(59,162,104,.6);color:#a8e6c0}
+.chip-line.closed{background:rgba(231,154,43,.18);border-color:rgba(231,154,43,.55);color:#ffd08a}
+.chip-line i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.modal .pwrow{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);margin-top:6px}
+.modal input[type=password]{height:34px;border:1px solid var(--line);border-radius:7px;padding:0 10px;font-family:var(--mono);font-size:13px}
+.radios{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.radios label{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;cursor:pointer;line-height:1.5}
+.radios label small{display:block;color:var(--muted);font-size:11.5px}
+.dlgerr{background:var(--danger-soft-2);border:1px solid var(--danger-line-2);color:var(--danger-ink);border-radius:7px;padding:8px 10px;font-size:12px;margin-top:4px}
+.qrimg{width:168px;height:168px;padding:9px;background:#fff;border:1px solid var(--line-2);border-radius:8px;box-sizing:content-box;object-fit:contain;display:block}
+.qrgone{width:168px;height:168px;padding:9px;border:1px dashed var(--line);border-radius:8px;box-sizing:content-box;display:grid;place-items:center;font-size:12px;color:var(--faint);text-align:center}
+.cart.unk .cqty{color:var(--faint)}
+.pre{margin:0;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:11px 12px;font-family:var(--mono);font-size:11.5px;line-height:1.55;overflow:auto;max-height:360px;white-space:pre}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.stat{background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}
+.stat span{font-size:11px;color:var(--muted)}
+.stat b{font-family:var(--mono);font-size:15px;font-weight:600}
+.opsgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+.opscard{padding:16px;display:flex;flex-direction:column;gap:12px}
+.opscard h3{margin:0;font-size:14px;font-weight:600}
+.opscard .sub2{font-size:12px;color:var(--muted);line-height:1.6;margin:-6px 0 0}
+.fbadge{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10.5px;font-weight:600;background:var(--danger);color:#fff;margin-left:6px;font-family:var(--mono)}
+.inline-input{height:32px;border:1px solid var(--line);border-radius:7px;padding:0 10px;font-family:var(--mono);font-size:12.5px;width:100%}
+.check{display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer}
+.muted{color:var(--muted)}
+/* 상세 패널 — 등장 효과는 처음 열 때만 (폴링 때마다 재생되면 깜박인다) */
+aside.detail{animation:none}
+aside.detail.enter{animation:slidein .18s ease-out}
+@media (max-width:900px){aside.detail.enter{animation:none}}
+/* 세부 정보는 조회 전용 — 구간 머리는 버튼이 아니다 */
+.phasehead.static{cursor:default}
+/* 상세 패널 래퍼가 내용 높이만큼 늘어나 문서 전체가 스크롤되던 것 — 데스크톱에서만 패널 안에서 스크롤 */
+@media (min-width:901px){#aside{display:flex;min-height:0;overflow:hidden}}
+</style>
+
+<div id="app">
+  <header class="bar">
+    <div class="brand"><div class="mark">딸</div><div class="name">ADMIN CONSOLE</div></div>
+    <div class="vr"></div>
+    <div class="sub">키링 조립 라인 · 관제</div>
+    <div class="spacer"></div>
+    <div id="hdrAlerts" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>
+    <button class="btn-agv" id="agvBtn" type="button" disabled title="백엔드에 AGV 정지 명령 API가 없습니다" style="background:transparent;color:#9fb0cc;border:1px dashed rgba(255,255,255,.3)">AGV 긴급정지 · 미연동</button>
+    <div class="clock" id="clock">--:--</div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div id="banner"></div>
+  <div class="body"><main id="main"></main><div id="aside"></div></div>
+</div>
+<div id="overlay"></div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===================== API ===================== */
+/* 접속 주소: 기본은 배포 서버. 로컬은 ?api=http://127.0.0.1:5000 */
+var API_BASE = (function(){
+  try {
+    var q = new URLSearchParams(location.search).get('api');
+    if(q) return q.replace(/\/+$/, '');
+  } catch(e) {}
+  return 'https://charry-erminia-revelational.ngrok-free.dev';
+})();
+var ADMIN_PW = null;   /* 비밀번호가 필요한 동작에서만 묻고 메모리에만 둔다 */
+
+async function api(method, path, body){
+  var res;
+  try {
+    res = await fetch(API_BASE + path, {
+      method: method,
+      headers: Object.assign({'ngrok-skip-browser-warning': 'true'},
+                             body ? {'Content-Type': 'application/json'} : {}),
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch(e) {
+    var ne = new Error('서버에 연결할 수 없습니다'); ne.status = 0; throw ne;
+  }
+  var data = null;
+  try { data = await res.json(); } catch(e) {}
+  if(!res.ok){
+    if(res.status === 400 && data && data.error === '비밀번호가 틀렸습니다') ADMIN_PW = null;
+    var err = new Error((data && data.error) || ('HTTP ' + res.status));
+    err.status = res.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/* ===================== 상수 ===================== */
+var LOW_AT = 6;                         /* 이 개수 이하면 부족 */
+var KEYCAP_MAX_FALLBACK = 40, BOARD_MAX_FALLBACK = 3;
+var CNAME = {r:'레드', y:'옐로', g:'그린', b:'블루'};
+var CHEX  = {r:'#e0443a', y:'#f1c33c', g:'#3ba268', b:'#3b76e8'};
+var CFG   = {r:'#fff', y:'#4a3a05', g:'#fff', b:'#fff'};
+var COLORS = ['r','y','g','b'];
+var BOARD_CODE = {red:'r', yellow:'y', green:'g', blue:'b'};
+
+var STATUS = {
+  대기중:['#eef1f6','#5b6478'], 호출중:['#fff4e2','#b06a12'], 조립중:['#e8f0ff','#2f5fd0'],
+  조립완료:['#e8f6ed','#1f7a4d'], 미수령:['#fdecea','#b03a2b'], 종료:['#f2f4f8','#6b7488']
+};
+var ORDER_STATUSES = ['대기중','호출중','조립중','조립완료','미수령','종료'];
+var PHASES = [
+  {id:'intake',    name:'접수',      bg:'#eef1f6', fg:'#5b6478'},
+  {id:'warehouse', name:'창고 출고', bg:'#f4eefe', fg:'#6d4bd0'},
+  {id:'agv',       name:'AGV 배송',  bg:'#e8f0ff', fg:'#2f5fd0'},
+  {id:'station',   name:'조립대',    bg:'#e8f6ed', fg:'#1f7a4d'}
+];
+var PHASE_MAP = {}; PHASES.forEach(function(p){ PHASE_MAP[p.id] = p; });
+/* config.STAGE_ORDER 와 이름·순서가 같다 */
+var STAGES = [
+  ['queued',            '대기열',      'intake'],
+  ['assigned',          '출고 지시',   'intake'],
+  ['keycap_mismatched', '키캡 불일치', 'warehouse', true],
+  ['keycap_dispensed',  '키캡 배출',   'warehouse'],
+  ['keycap_reached',    '키캡 이송',   'warehouse'],
+  ['keycap_packed',     '키캡 적재',   'warehouse'],
+  ['tray_reached',      '트레이 이송', 'warehouse'],
+  ['board_mismatched',  '보드 불일치', 'warehouse', true],
+  ['board_packed',      '보드 적재',   'warehouse'],
+  ['pickup_reached',    '출고 대기',   'warehouse'],
+  ['loaded',            'AGV 적재',    'agv'],
+  ['arrived',           '조립대 도착', 'agv'],
+  ['unclaimed',         '미수령',      'station', true],
+  ['verified',          '사용자 인증', 'station'],
+  ['received',          '부품 수령',   'station'],
+  ['completed',         '주문 완료',   'station']
+];
+var STAGE_MAP = {}, STAGE_IDX = {};
+STAGES.forEach(function(t, i){ STAGE_MAP[t[0]] = t; STAGE_IDX[t[0]] = i; });
+var WAREHOUSE_STAGES = ['assigned','keycap_mismatched','keycap_dispensed','keycap_reached','keycap_packed','tray_reached','board_mismatched','board_packed'];
+function stageOf(code){ return STAGE_MAP[code] || null; }
+function stageLabel(code){ var s = stageOf(code); return s ? s[1] : (code || '-'); }
+
+/* 키캡 선반 = 구역. 선반 번호는 config.MBTI_AXES 순서 (E/I · S/N · T/F · J/P) */
+var ZONES = [
+  {id:'zone1', no:1, shelf:'keycap1', letters:['E','I'], belt:'keycap_01_belt'},
+  {id:'zone2', no:2, shelf:'keycap2', letters:['N','S'], belt:'keycap_01_belt'},
+  {id:'zone3', no:3, shelf:'keycap3', letters:['T','F'], belt:'keycap_02_belt'},
+  {id:'zone4', no:4, shelf:'keycap4', letters:['P','J'], belt:'keycap_02_belt'}
+];
+var SHELF_ZONE = {};
+ZONES.forEach(function(z){ SHELF_ZONE[z.shelf] = z.id; });
+
+var PARTS = {
+  zone1:{name:'구역 1 카트리지'}, zone2:{name:'구역 2 카트리지'},
+  zone3:{name:'구역 3 카트리지'}, zone4:{name:'구역 4 카트리지'},
+  keycap_01_belt:{name:'키캡 컨베이어 1'}, keycap_02_belt:{name:'키캡 컨베이어 2'},
+  keycap_arm:{name:'키캡 로봇암'}, board_rack:{name:'보드 랙'}, board_arm:{name:'보드 로봇암'},
+  tray_arm:{name:'트레이 로봇암'}, tray_01_belt:{name:'트레이 컨베이어 1'}, tray_02_belt:{name:'트레이 컨베이어 2'},
+  agv_bay:{name:'AGV 대기 장소'}, platform:{name:'플랫폼 감지'}
+};
+
+/* fault 카탈로그 — 백엔드가 세우는 17값 기준 (fault_정리 3장). 파트는 fault_section 으로 정한다 */
+var FAULTS = {
+  keycap_01_belt_jammed:  {g:'컨베이어', sec:'keycap_conveyor:01', actor:'창고',     label:'벨트 걸림',        fix:'구역 1·2 벨트 구간 잔류물 정리'},
+  keycap_02_belt_jammed:  {g:'컨베이어', sec:'keycap_conveyor:02', actor:'창고',     label:'벨트 걸림',        fix:'구역 3·4 벨트 구간 잔류물 정리'},
+  tray_01_belt_jammed:    {g:'컨베이어', sec:'tray_conveyor:01',   actor:'창고',     label:'벨트 걸림',        fix:'트레이 벨트 앞 구간 정리'},
+  tray_02_belt_jammed:    {g:'컨베이어', sec:'tray_conveyor:02',   actor:'창고',     label:'벨트 걸림',        fix:'트레이 벨트 뒤 구간 정리'},
+  keycap_cartridge_failed:{g:'카트리지', sec:'keycap_cartridge:{선반}:{칸}', actor:'창고', label:'카트리지 고장', fix:'카트리지 재장착 후 배출 테스트'},
+  keycap_driver_failed:   {g:'카트리지', sec:'keycap_cartridge:{선반}', actor:'창고',  label:'드라이버 고장',    fix:'드라이버 리셋 · 교체 (선반 8칸 전체)'},
+  board_cartridge_failed: {g:'카트리지', sec:'board_cartridge:{칸}', actor:'창고',     label:'보드 재출고 초과', fix:'보드 보관대 확인 후 재출고'},
+  keycap_pack_failed:     {g:'로봇암',   sec:'keycap_robot_arm:{keycapN}', actor:'창고', label:'키캡 투입 실패', fix:'트레이 위치 정렬 후 재투입'},
+  board_pack_failed:      {g:'로봇암',   sec:'board_robot_arm',    actor:'창고',     label:'보드 투입 실패',   fix:'보드 파지 재시도'},
+  tray_load_failed:       {g:'로봇암',   sec:'tray_robot_arm',     actor:'창고',     label:'트레이 투입 실패', fix:'빈 트레이 재투입'},
+  pickup_failed:          {g:'AGV',      sec:'agv',                actor:'agv',      label:'픽업 실패',        fix:'AGV 재접근 · 픽업 재시도'},
+  drop_failed:            {g:'AGV',      sec:'agv · agv:station{N}', actor:'agv',    label:'하차 실패 · 오배송', fix:'조립대 하차 위치 재정렬 / 제 조립대로 재도착'},
+  agv_broken:             {g:'AGV',      sec:'agv',                actor:'agv',      label:'AGV 자체 고장',    fix:'사람 개입 필요 · 수동 견인 후 부팅'},
+  keycap_empty:           {g:'재고',     sec:'keycap_cartridge:{선반}:{칸}', actor:'창고', label:'키캡 재고 소진', fix:'카트리지 교체(재고 채우기) 후 fault 해제'},
+  board_empty:            {g:'재고',     sec:'board_cartridge:{칸}', actor:'창고',     label:'보드 재고 소진',   fix:'보드 보충(재고 채우기) 후 fault 해제'},
+  stage_timeout:          {g:'플랫폼',   sec:'그 단계 설비',        actor:'플랫폼',   label:'단계 체류 초과',   fix:'끊긴 동작 재수행 후 fault 해제'},
+  restart_unknown:        {g:'플랫폼',   sec:'keycap_cartridge',   actor:'플랫폼',   label:'재기동 진행 불명', fix:'창고 진행분 확인 후 fault 해제'}
+};
+function faultDef(code){ return FAULTS[code] || {g:'기타', sec:'-', actor:'플랫폼', label:code || '알 수 없음', fix:'로그 확인'}; }
+
+/* ===================== 상태 ===================== */
+var S = {
+  tab:'orders',
+  orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, board:{}, boardMax:{}, faults:[], line:null,
+  loaded:{}, err:{},
+  printer:{name:'키오스크', qty:900, cap:900, lastAt:'-'},   /* 백엔드 미연동 — 이 브라우저에만 있는 값 */
+  log:[], paperLog:[],
+  query:'', filter:'전체', sel:[], detailId:null, detailEnter:false, receiptId:null,
+  dialog:null,
+  reset:{mode:'zero', keep_queue:false, confirm:''}, resetResult:null,
+  snap:null, snapBusy:false, snapMobius:false
+};
+
+/* ===================== 유틸 ===================== */
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function p2(n){ return String(n).padStart(2,'0'); }
+function now(){ var d = new Date(); return p2(d.getHours()) + ':' + p2(d.getMinutes()); }
+function hhmm(iso){ return iso && iso.length >= 16 ? iso.slice(11, 16) : '-'; }
+function fmtSec(s){ if(s == null) return '-'; s = Math.max(0, Math.round(s)); return s < 60 ? s + '초' : Math.floor(s / 60) + '분 ' + (s % 60) + '초'; }
+function stNo(sid){ return p2(sid); }
+function lowCarts(){ return Object.keys(S.stock).filter(function(k){ return S.stock[k] > 0 && S.stock[k] <= LOW_AT; }); }
+function outCarts(){ return Object.keys(S.stock).filter(function(k){ return S.stock[k] === 0; }); }
+function keyMax(k){ return S.stockMax[k] || KEYCAP_MAX_FALLBACK; }
+function boardMax(c){ return S.boardMax[c] || BOARD_MAX_FALLBACK; }
+function boardTotal(){ return COLORS.reduce(function(a, c){ return a + (S.board[c] || 0); }, 0); }
+function boardCap(){ return COLORS.reduce(function(a, c){ return a + boardMax(c); }, 0); }
+function paperLow(){ return S.printer.qty === 0 || S.printer.qty / S.printer.cap <= 0.12; }
+function callCount(){ return Object.keys(S.calls).length; }
+
+/* fault_section(part[:scope[:slot]]) → 도면 파트 */
+function partOf(f){
+  if(f.code === 'stage_timeout' || f.code === 'restart_unknown') return 'platform';
+  var p = (f.section || '').split(':');
+  switch(p[0]){
+    case 'keycap_cartridge': return SHELF_ZONE[p[1]] || 'platform';
+    case 'board_cartridge':  return 'board_rack';
+    case 'keycap_conveyor':  return p[1] === '02' ? 'keycap_02_belt' : 'keycap_01_belt';
+    case 'tray_conveyor':    return p[1] === '02' ? 'tray_02_belt' : 'tray_01_belt';
+    case 'keycap_robot_arm': return 'keycap_arm';
+    case 'board_robot_arm':  return 'board_arm';
+    case 'tray_robot_arm':   return 'tray_arm';
+    case 'agv':              return 'agv_bay';
+  }
+  return 'platform';
+}
+function faultsOf(pid){ return S.faults.filter(function(f){ return partOf(f) === pid; }); }
+function actorClass(a){ return a === 'agv' ? 'agv' : (a === '플랫폼' ? 'plat' : ''); }
+function say(msg){
+  var el = document.getElementById('toast');
+  el.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+  clearTimeout(say._t);
+  say._t = setTimeout(function(){ el.innerHTML = ''; }, 2600);
+}
+function addLog(text){ S.log = [{time:now(), text:text}].concat(S.log).slice(0, 12); }
+function capTiles(o){
+  return (o.mbti || '').split('').map(function(ch, i){
+    var c = o.caps[i] || 'b';
+    return '<span class="captile" title="' + (CNAME[c] || c) + '" style="background:' + (CHEX[c] || '#ccc') + ';color:' + (CFG[c] || '#fff') + '">' + esc(ch) + '</span>';
+  }).join('');
+}
+function stageCell(code, fault){
+  var s = stageOf(code);
+  var fb = fault ? '<span class="fbadge" title="' + esc(fault) + '">fault</span>' : '';
+  if(!s) return '<span class="stagecell"><span class="stagename">' + esc(code || '-') + '</span>' + fb + '</span>';
+  var ph = PHASE_MAP[s[2]];
+  return '<span class="stagecell" title="' + s[0] + '">' +
+    '<span class="phasechip" style="background:' + ph.bg + ';color:' + ph.fg + '">' + ph.name + '</span>' +
+    '<span class="stagename' + (s[3] ? ' abn' : '') + '">' + s[1] + '</span>' + fb + '</span>';
+}
+function errBox(names){
+  var msgs = names.filter(function(n){ return S.err[n]; }).map(function(n){ return S.err[n]; });
+  if(!msgs.length) return '';
+  return '<div class="alert"><div class="t"><span>⚠</span>서버 응답 오류</div><div style="font-size:12px;color:var(--danger-ink)">' +
+    esc(msgs.filter(function(m, i){ return msgs.indexOf(m) === i; }).join(' · ')) + ' — ' + esc(API_BASE) + '</div></div>';
+}
+
+/* 사용자상태 — 백엔드에 없는 값이라 stage 에서 파생한다 */
+function userStatus(o){
+  if(o.ended_at && o.reason) return '종료';
+  switch(o.stage){
+    case 'loaded': case 'arrived':    return '호출중';
+    case 'verified': case 'received': return '조립중';
+    case 'completed':                 return '조립완료';
+    case 'unclaimed':                 return '미수령';
+    default:                          return '대기중';
+  }
+}
+function stationStatus(occ, o){
+  if(occ === 'idle' || !o) return '배정 대기 중';
+  if(o.stage === 'unclaimed') return '폐기 대기';
+  var u = userStatus(o);
+  return {호출중:'호출 중', 조립중:'조립 중', 조립완료:'조립 완료'}[u] || '부품 준비 중';
+}
+
+/* ===================== 데이터 로더 ===================== */
+async function loadOrders(){
+  var d = await api('GET', '/admin/orders');
+  var seen = {};
+  var list = (d.orders || []).filter(function(o){        /* 노쇼 폐기 대기 주문은 진행 중·아카이브에 둘 다 나온다 — 앞(진행 중)을 남긴다 */
+    if(seen[o.order_id]) return false;
+    seen[o.order_id] = true; return true;
+  }).map(function(o){
+    return {
+      orderNo: o.order_id,
+      seq: o.order_seq,
+      waitNo: o.order_seq != null ? String(o.order_seq) : '-',
+      mbti: o.keycap || '',
+      caps: o.colors || [],
+      boardColor: BOARD_CODE[o.board] || o.board,
+      sid: o.station_id ? String(o.station_id) : null,
+      station: o.station_id ? stNo(o.station_id) : '배정 중',
+      stage: o.stage,
+      status: userStatus(o),
+      fault: o.fault || null,
+      ended: !!o.ended_at,
+      endedAt: o.ended_at || null,
+      reason: o.reason || null,
+      createdAt: o.created_at || null
+    };
+  });
+  list.sort(function(a, b){
+    if(a.ended !== b.ended) return a.ended ? 1 : -1;               /* 진행 중 먼저 */
+    return a.ended ? (b.seq || 0) - (a.seq || 0) : (a.seq || 0) - (b.seq || 0);
+  });
+  S.orders = list;
+  var ids = list.map(function(o){ return o.orderNo; });
+  S.sel = S.sel.filter(function(id){ return ids.indexOf(id) >= 0; });
+}
+async function loadStations(){
+  var d = await api('GET', '/admin/stations');
+  S.stations = (d.stations || []).map(function(s){
+    return {sid:String(s.station_id), no:stNo(s.station_id), occupancy:s.occupancy, order:s.order || null};
+  });
+}
+async function loadCalls(){
+  var d = await api('GET', '/admin/calls');
+  var m = {};
+  (d.calls || []).forEach(function(c){ m[String(c.station_id)] = c; });
+  S.calls = m;
+}
+async function loadStock(){
+  var d;
+  try { d = await api('GET', '/admin/stock'); }
+  catch(e){
+    if(e.status === 503){ S.stock = {}; S.board = {}; throw new Error('재고 정보가 아직 없습니다 (부팅 직후 시드 전)'); }
+    throw e;
+  }
+  var st = {}, mx = {}, bd = {}, bm = {};
+  Object.keys(d.keycap || {}).forEach(function(l){
+    Object.keys(d.keycap[l]).forEach(function(c){
+      st[l + '_' + c] = d.keycap[l][c].qty;
+      mx[l + '_' + c] = d.keycap[l][c].max;
+    });
+  });
+  Object.keys(d.board || {}).forEach(function(c){ bd[c] = d.board[c].qty; bm[c] = d.board[c].max; });
+  S.stock = st; S.stockMax = mx; S.board = bd; S.boardMax = bm;
+}
+async function loadFaults(){
+  var d = await api('GET', '/admin/faults');
+  S.faults = (d.faults || []).map(function(x){
+    var p = (x.fault_section || '').split(':');
+    return {
+      id: x.order_id,
+      code: x.fault,
+      section: x.fault_section || '',
+      target: x.fault === 'stage_timeout' ? (x.fault_section || '') : (p[2] || p[1] || ''),
+      seq: x.order_seq,
+      wait: x.order_seq != null ? String(x.order_seq) : '-',
+      stage: x.stage,
+      sid: x.station_id || null
+    };
+  });
+}
+async function loadLine(){ S.line = await api('GET', '/admin/line'); }
+
+var SOURCES = {orders:loadOrders, stations:loadStations, calls:loadCalls, stock:loadStock, faults:loadFaults, line:loadLine};
+var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','stock'], paper:[], ops:['line'], guide:[]};
+var HEADER_SOURCES = ['calls','line','stock'];
+var refreshing = false;
+
+/* 갱신 간격. 서버는 sync 워커 1개이고 요청마다 Redis 명령이 여러 개 나간다 (orders 10 · line 8 · faults 9 · stations 7 · calls 5 · stock 1).
+   보는 탭만 10초, 헤더(호출·영업 상태·재고)는 30초, 전체는 60초. 탭이 숨겨져 있으면 쉰다. */
+var POLL_TAB_MS = 10000, POLL_HEADER_MS = 30000, POLL_ALL_MS = 60000;
+var lastHeaderAt = 0, lastAllAt = 0, lastAnyAt = 0;
+
+/* level 0 = 보는 탭만 · 1 = 탭 + 헤더 · 2 = 전부 */
+async function refresh(level){
+  if(refreshing) return;
+  refreshing = true;
+  var now0 = Date.now();
+  lastAnyAt = now0;
+  if(level >= 1) lastHeaderAt = now0;
+  if(level >= 2) lastAllAt = now0;
+  var names = level >= 2 ? Object.keys(SOURCES) : (TAB_SOURCES[S.tab] || []).concat(level >= 1 ? HEADER_SOURCES : []);
+  names = names.filter(function(n, i){ return names.indexOf(n) === i; });
+  await Promise.all(names.map(async function(n){
+    try { await SOURCES[n](); S.err[n] = null; }
+    catch(e){ S.err[n] = e.message; }
+    S.loaded[n] = true;
+  }));
+  refreshing = false;
+  renderHeader(); renderMain();          /* 확인 창은 다시 그리지 않는다 — 입력 중인 비밀번호가 지워진다 */
+}
+
+/* ===================== 탭 ===================== */
+var TABS = [
+  {id:'orders',   label:'모든 주문'},
+  {id:'stations', label:'조립대 상태'},
+  {id:'stock',    label:'창고 재고'},
+  {id:'wh',       label:'창고 상태'},
+  {id:'paper',    label:'영수증 용지'},
+  {id:'ops',      label:'운영'},
+  {id:'guide',    label:'연동 현황'}
+];
+function tabCount(id){
+  if(id === 'orders')   return S.loaded.orders ? S.orders.filter(function(o){ return !o.ended; }).length : '';
+  if(id === 'stations') return S.loaded.calls ? callCount() || '' : '';
+  if(id === 'stock')    return S.loaded.stock ? lowCarts().length + outCarts().length : '';
+  if(id === 'wh')       return S.loaded.faults ? S.faults.length : '';
+  if(id === 'paper')    return paperLow() ? 1 : '';
+  return '';
+}
+
+/* ===================== 탭 1: 모든 주문 ===================== */
+function visibleOrders(){
+  var q = S.query.trim().toLowerCase();
+  return S.orders.filter(function(o){
+    if(S.filter !== '전체' && o.status !== S.filter) return false;
+    if(!q) return true;
+    return (o.waitNo + ' ' + o.orderNo + ' ' + o.mbti).toLowerCase().indexOf(q) >= 0;
+  });
+}
+function viewOrders(){
+  var visible = visibleOrders();
+  var chips = ['전체'].concat(ORDER_STATUSES).map(function(k){
+    var n = k === '전체' ? S.orders.length : S.orders.filter(function(o){ return o.status === k; }).length;
+    return '<button class="chipbtn" aria-pressed="' + (S.filter === k) + '" data-act="filter" data-v="' + k + '" type="button">' + k + ' ' + n + '</button>';
+  }).join('');
+  var allChecked = visible.length > 0 && visible.every(function(o){ return S.sel.indexOf(o.orderNo) >= 0; });
+
+  var rows = visible.map(function(o){
+    var st = STATUS[o.status] || STATUS.대기중;
+    var checked = S.sel.indexOf(o.orderNo) >= 0;
+    return '<tr class="rowlink' + (S.detailId === o.orderNo ? ' open' : (checked ? ' sel' : '')) + '" data-act="open-order" data-no="' + esc(o.orderNo) + '">' +
+      '<td style="width:34px"><input type="checkbox" ' + (checked ? 'checked' : '') + ' data-act="toggle-sel" data-no="' + esc(o.orderNo) + '" style="cursor:pointer;width:14px;height:14px;accent-color:#2f6df6"></td>' +
+      '<td class="num" style="font-weight:600;color:var(--navy)">' + esc(o.waitNo) + '</td>' +
+      '<td class="num" style="color:var(--primary)">' + esc(o.orderNo) + '</td>' +
+      '<td class="mono" style="font-weight:600;letter-spacing:.04em">' + esc(o.mbti) + '</td>' +
+      '<td><div style="display:flex;gap:4px">' + capTiles(o) + '</div></td>' +
+      '<td><span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--slate);white-space:nowrap"><span class="sw" style="width:16px;height:16px;background:' + (CHEX[o.boardColor] || '#ccc') + '"></span>' + (CNAME[o.boardColor] || esc(o.boardColor)) + '</span></td>' +
+      '<td class="num" style="color:' + (o.sid ? 'var(--navy)' : 'var(--faint)') + '">' + esc(o.station) + '</td>' +
+      '<td>' + stageCell(o.stage, o.fault) + '</td>' +
+      '<td><span title="' + esc(o.reason || '') + '" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11.5px;font-weight:500;white-space:nowrap;background:' + st[0] + ';color:' + st[1] + '"><span style="width:5px;height:5px;border-radius:50%;background:' + st[1] + '"></span>' + o.status + '</span></td>' +
+      '<td style="text-align:right"><button class="btn sm" data-act="receipt" data-no="' + esc(o.orderNo) + '" type="button" style="border:none;background:none;padding:0;height:auto;color:var(--muted);border-bottom:1px solid #cfd6e2;border-radius:0">보기</button></td>' +
+      '</tr>';
+  }).join('');
+
+  var empty = !S.loaded.orders ? '불러오는 중…' : '조건에 맞는 주문이 없습니다.';
+  return '<div class="wrap">' + errBox(['orders']) +
+    '<div class="toolbar">' +
+      '<div class="field" style="width:260px"><span style="color:var(--faint);font-size:12px">⌕</span>' +
+      '<input id="q" value="' + esc(S.query) + '" data-act="query" placeholder="대기번호 · 주문번호 · MBTI 검색" style="width:100%"></div>' +
+      chips +
+      '<div class="spacer"></div>' +
+      '<div style="font-size:12px;color:var(--muted)">' + (S.sel.length ? S.sel.length + '건 선택' : '진행 중 + 오늘 종료') + '</div>' +
+    '</div>' +
+    '<div class="card tablebox">' + (visible.length
+      ? '<table style="min-width:920px;white-space:nowrap"><thead><tr>' +
+        '<th style="width:34px"><input type="checkbox" ' + (allChecked ? 'checked' : '') + ' data-act="toggle-all" style="cursor:pointer;width:14px;height:14px;accent-color:#2f6df6"></th>' +
+        '<th>대기번호</th><th>주문번호</th><th>MBTI</th><th>키캡색상</th><th>보드색상</th><th>조립대</th><th>현재 단계</th><th>사용자상태</th><th style="text-align:right">영수증</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty">' + empty + '</div>') + '</div>' +
+  '</div>';
+}
+function viewDetail(){
+  var d = S.orders.filter(function(o){ return o.orderNo === S.detailId; })[0];
+  if(!d) return '';
+  var step = function(label, on){ return '<div class="step' + (on ? ' on' : '') + '">' + label + '</div>'; };
+  var ladder = function(d){
+    var cur = stageOf(d.stage);
+    if(!cur) return '<div class="muted" style="font-size:12px">알 수 없는 단계: ' + esc(d.stage) + '</div>';
+    var idx = STAGE_IDX[d.stage], curPhase = cur[2], curAbn = !!cur[3];
+    var open = curPhase;                       /* 현재 구간만 펼친 고정 표시 — 클릭으로 접고 펴지 않는다 */
+    return '<div class="ladder">' + PHASES.map(function(p){
+      var list = STAGES.filter(function(s){ return s[2] === p.id; });
+      var maxIdx = STAGE_IDX[list[list.length - 1][0]];
+      var isCur = p.id === curPhase, isDone = !isCur && maxIdx < idx;
+      var normals = list.filter(function(s){ return !s[3]; });
+      var reached = normals.filter(function(s){ return STAGE_IDX[s[0]] <= idx; }).length;
+      var mk = isDone ? '<span class="mk done">✓</span>'
+             : isCur ? '<span class="mk cur' + (curAbn ? ' abn' : '') + '">●</span>'
+             : '<span class="mk">○</span>';
+      var body = open === p.id
+        ? '<div class="phasebody">' + list.map(function(s){
+            var i = STAGE_IDX[s[0]];
+            var cls = s[3] ? (i === idx ? 'now abn' : 'abn') : (i === idx ? 'now' : (i < idx ? 'done' : ''));
+            return '<div class="st ' + cls + '"><span class="c">' + s[0] + '</span>' + s[1] + '</div>';
+          }).join('') + '</div>'
+        : '';
+      return '<div class="phase' + (isCur ? ' cur' : '') + (isCur && curAbn ? ' abn' : '') + '">' +
+        '<div class="phasehead static">' + mk +
+        '<span class="nm">' + p.name + '</span>' +
+        '<span class="ct">' + (isDone ? normals.length : reached) + '/' + normals.length + '</span></div>' +
+        body + '</div>';
+    }).join('') + '</div>';
+  };
+  var canAbort = !d.ended && d.stage !== 'completed';
+  return '<aside class="detail' + (S.detailEnter ? ' enter' : '') + '">' +
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
+      '<div style="display:flex;flex-direction:column;gap:4px">' +
+        '<div class="mono" style="font-size:11.5px;color:var(--faint-2);letter-spacing:.06em">대기번호</div>' +
+        '<div class="mono" style="font-size:26px;font-weight:700;letter-spacing:-.01em">' + esc(d.waitNo) + '</div>' +
+      '</div>' +
+      '<button class="xbtn" data-act="close-detail" type="button">✕</button>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:9px;padding-bottom:15px;border-bottom:1px solid var(--line-hair)">' +
+      '<div class="dl"><span>주문번호</span><span class="mono">' + esc(d.orderNo) + '</span></div>' +
+      '<div class="dl"><span>MBTI</span><span class="mono" style="font-weight:600">' + esc(d.mbti) + '</span></div>' +
+      '<div class="dl"><span>키캡색상</span><span style="display:flex;gap:4px">' + capTiles(d) + '</span></div>' +
+      '<div class="dl"><span>보드 색상</span><span style="display:inline-flex;align-items:center;gap:7px"><span class="sw" style="width:18px;height:18px;background:' + (CHEX[d.boardColor] || '#ccc') + '"></span>' + (CNAME[d.boardColor] || esc(d.boardColor)) + '</span></div>' +
+      '<div class="dl"><span>접수</span><span class="mono">' + hhmm(d.createdAt) + '</span></div>' +
+      (d.ended ? '<div class="dl"><span>종료</span><span class="mono">' + hhmm(d.endedAt) + (d.reason ? ' · ' + esc(d.reason) : '') + '</span></div>' : '') +
+      (d.fault ? '<div class="dl"><span>fault</span><span class="badge">' + esc(d.fault) + '</span></div>' : '') +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:9px">' +
+      '<div class="ro">현재 단계<em>조회 전용</em></div>' +
+      '<div style="margin:-2px 0 1px">' + stageCell(d.stage, d.fault) + '</div>' +
+      ladder(d) +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:9px">' +
+      '<div class="ro">사용자 상태<em>조회 전용</em></div>' +
+      '<div class="grid2">' + ORDER_STATUSES.map(function(k){ return step(k, d.status === k); }).join('') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:9px">' +
+      '<div class="ro">조립대 배정<em>조회 전용</em></div>' +
+      '<div class="grid4">' + ['배정 중','01','02','03'].map(function(n){ return step(n, d.station === n); }).join('') + '</div>' +
+    '</div>' +
+    '<button class="btn" data-act="receipt" data-no="' + esc(d.orderNo) + '" type="button" style="height:36px">영수증 보기</button>' +
+    (canAbort ? '<button class="btn ghostdanger" data-act="abort-order" data-no="' + esc(d.orderNo) + '" type="button" style="height:34px">이 주문만 중단</button>' : '') +
+  '</aside>';
+}
+
+/* ===================== 탭 2: 조립대 상태 ===================== */
+function viewStations(){
+  var list = S.stations.length ? S.stations : ['1','2','3'].map(function(id){ return {sid:id, no:stNo(id), occupancy:'idle', order:null}; });
+  var helpCount = callCount();
+  var assigned = list.filter(function(s){ return s.order; }).length;
+  var cards = list.map(function(s){
+    var call = S.calls[s.sid], help = !!call, o = s.order;
+    var callNo = o && o.order_seq != null ? String(o.order_seq) : '';
+    return '<div class="card stcard' + (help ? ' help' : '') + '">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+        '<div style="font-size:19px;font-weight:700;letter-spacing:-.01em">조립대 ' + s.no + '</div>' +
+        (help ? '<span class="badge" style="background:#f7d9d4;color:var(--danger-deep);font-weight:600"><span class="dot" style="background:var(--danger)"></span>도움 요청</span>' : '') +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:5px">' +
+        '<div style="font-size:12px;color:var(--muted)">배정된 대기번호 · ' + esc(stationStatus(s.occupancy, o)) + '</div>' +
+        '<div class="big" style="color:' + (callNo ? 'var(--navy)' : '#b6bdca') + '">' + (callNo || '미배정') + '</div>' +
+        (o ? '<div>' + stageCell(o.stage, o.fault) + '</div>' : '') +
+      '</div>' +
+      (help
+        ? '<div class="helpbox">' +
+            '<div style="display:flex;justify-content:space-between;font-size:12px">' +
+              '<span style="color:#8b6058">호출 시각</span>' +
+              '<span class="mono" style="font-weight:600;color:var(--danger-deep)">' + hhmm(call.called_at) + ' · ' + fmtSec(call.waited_sec) + ' 대기</span></div>' +
+            '<div style="display:flex;justify-content:space-between;font-size:12px">' +
+              '<span style="color:#8b6058">누른 횟수</span>' +
+              '<span class="mono" style="color:var(--danger-deep)">' + (call.count || 1) + '회' + (call.order_id ? '' : ' · 주문 없이 호출') + '</span></div>' +
+            '<button class="btn danger" data-act="resolve-help" data-sid="' + s.sid + '" type="button">호출 해결</button>' +
+          '</div>'
+        : '') +
+      '<div style="display:flex;gap:6px">' +
+        '<button class="btn" data-act="reset-station" data-sid="' + s.sid + '" type="button" style="flex:1"' + (o ? '' : ' disabled title="배정된 주문이 없습니다"') + '>초기화 · 주문 중단</button>' +
+        (!help ? '<button class="btn" data-act="raise-help" data-sid="' + s.sid + '" type="button" style="border-style:dashed;color:var(--faint);font-size:11.5px" title="실제 호출과 같이 마감이 연장됩니다">호출 발생(테스트)</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="wrap">' + errBox(['stations','calls']) +
+    '<div class="sechead"><h2>조립대 상태</h2><span class="note">배정 ' + assigned + ' · 미배정 ' + (list.length - assigned) + (helpCount ? ' · 도움 요청 ' + helpCount : '') + '</span></div>' +
+    '<div class="cards3">' + cards + '</div></div>';
+}
+
+/* ===================== 탭 3: 창고 재고 ===================== */
+function cartTile(letter, ck){
+  var key = letter + '_' + ck, n = S.stock[key], max = keyMax(key);
+  if(n === undefined){
+    return '<button class="cart unk" data-act="refill-cart" data-key="' + key + '" type="button">' +
+      '<div class="cid"><span class="sw" style="width:12px;height:12px;background:' + CHEX[ck] + '"></span><span class="cname">' + key + '</span></div>' +
+      '<div class="cqty">—<s> / ' + max + '</s></div><div class="meter"><i style="width:0"></i></div></button>';
+  }
+  var cls = n === 0 ? 'out' : (n <= LOW_AT ? 'low' : '');
+  return '<button class="cart ' + cls + '" data-act="refill-cart" data-key="' + key + '" type="button">' +
+    '<div class="cid"><span class="sw" style="width:12px;height:12px;background:' + CHEX[ck] + '"></span><span class="cname">' + key + '</span></div>' +
+    '<div class="cqty">' + n + '<s> / ' + max + '</s></div>' +
+    '<div class="meter"><i style="width:' + Math.min(100, Math.round(n / max * 100)) + '%"></i></div></button>';
+}
+function viewStock(){
+  var out = outCarts(), low = lowCarts();
+  var missing = COLORS.filter(function(c){ return S.board[c] === 0; });
+
+  var zoneCards = ZONES.map(function(z){
+    var tiles = z.letters.map(function(l){ return COLORS.map(function(c){ return cartTile(l, c); }).join(''); }).join('');
+    var zl = 0, zm = 0;
+    z.letters.forEach(function(l){ COLORS.forEach(function(c){ zl += S.stock[l + '_' + c] || 0; zm += keyMax(l + '_' + c); }); });
+    return '<div class="card zonecard">' +
+      '<div class="zonehead"><span class="z">구역 ' + z.no + '</span><span class="l">' + z.letters.join(' / ') + '</span>' +
+      '<span class="b">' + z.shelf + ' · ' + zl + '/' + zm + '</span></div>' +
+      '<div class="cartgrid">' + tiles + '</div></div>';
+  }).join('');
+
+  var boardRows = COLORS.map(function(c){
+    var n = S.board[c], max = boardMax(c), known = n !== undefined;
+    return '<div class="boardrow">' +
+      '<span class="sw" style="width:16px;height:16px;background:' + CHEX[c] + '"></span>' +
+      '<span style="font-size:12.5px;font-weight:500">보드 · ' + CNAME[c] + ' <span class="mono" style="color:var(--faint);font-size:11px">' + c + '</span></span>' +
+      '<span class="num" style="text-align:right;color:' + (n ? 'var(--ink)' : 'var(--danger-btn-fg)') + '">' + (known ? n + ' / ' + max : '—') + '</span>' +
+      '<button class="btn sm" data-act="load-board" data-color="' + c + '" type="button"' + (known && n >= max ? ' disabled' : '') + '>채우기</button></div>';
+  }).join('');
+
+  return '<div class="wrap narrow">' + errBox(['stock']) +
+    (out.length || low.length
+      ? '<div class="alert"><div class="t"><span>⚠</span>키캡 카트리지 · 소진 ' + out.length + ' · 부족 ' + low.length + '</div><div class="tags">' +
+        out.map(function(k){ return '<span class="tag">' + k + ' · 소진</span>'; }).join('') +
+        low.map(function(k){ return '<span class="tag n">' + k + ' · ' + S.stock[k] + '개</span>'; }).join('') + '</div></div>'
+      : '') +
+    (missing.length
+      ? '<div class="alert warn"><div class="t"><span>⚠</span>보드 소진 · ' + missing.map(function(c){ return CNAME[c]; }).join(', ') + '</div>' +
+        '<div style="font-size:12px;color:var(--warn-ink)">해당 색상 보드를 쓰는 주문은 배정되지 않고 대기열에서 기다립니다.</div></div>'
+      : '') +
+    '<div class="sechead"><h2>보드 보관대</h2><span class="note">색상 4칸 · 칸당 최대 ' + boardMax('r') + '장 (현재 ' + boardTotal() + '/' + boardCap() + ')</span></div>' +
+    '<div class="card rack">' + boardRows + '</div>' +
+    '<div class="sechead" style="margin-top:6px"><h2>키캡 카트리지</h2><span class="note">MBTI 글자 8종 × 색상 4종 = 32 · 카트리지당 최대 ' + keyMax('E_r') + '개 · ' + LOW_AT + '개 이하 부족</span></div>' +
+    '<div class="toolbar"><button class="btn primary" data-act="refill-low" type="button"' + (out.length + low.length ? '' : ' disabled') + '>부족·소진 카트리지 일괄 교체</button>' +
+      '<span style="font-size:12px;color:var(--muted)">카트리지를 누르면 교체 확인 창이 열립니다. 고장(disable) 칸은 채워도 풀리지 않습니다 — fault 해제로 풉니다.</span></div>' +
+    '<div class="zonegrid">' + zoneCards + '</div>' +
+    '<div class="card" style="padding:14px 15px;display:flex;flex-direction:column;gap:6px">' +
+      '<div style="font-size:12.5px;font-weight:600;color:var(--slate)">이 화면에서 한 교체 내역 <span class="muted" style="font-weight:400">(새로고침하면 사라짐)</span></div>' +
+      (S.log.length
+        ? S.log.map(function(e){ return '<div class="logrow"><span class="mono" style="color:var(--faint)">' + e.time + '</span><span>' + esc(e.text) + '</span></div>'; }).join('')
+        : '<div style="font-size:12px;color:var(--faint)">아직 교체 내역이 없습니다.</div>') +
+    '</div></div>';
+}
+
+/* ===================== 탭 4: 창고 상태 ===================== */
+function partEl(id, inner, cls){
+  var bad = faultsOf(id).length > 0;
+  return '<button class="part ' + (cls || '') + (bad ? ' bad' : '') + '" data-part="' + id + '" data-act="locate-part" type="button">' + inner(bad) + '</button>';
+}
+function zoneInner(z){
+  return function(bad){
+    var rows = z.letters.map(function(l){
+      var pips = COLORS.map(function(c){
+        var key = l + '_' + c, n = S.stock[key];
+        var k = n === 0 ? ' out' : (n !== undefined && n <= LOW_AT ? ' low' : '');
+        return '<span class="pip' + k + '" style="background:' + CHEX[c] + (n === undefined ? ';opacity:.25' : '') + '" title="' + key + ' · ' + (n === undefined ? '?' : n) + '/' + keyMax(key) + '"></span>';
+      }).join('');
+      return '<div class="piprow"><span class="lt">' + l + '</span>' + pips + '</div>';
+    }).join('');
+    return '<div class="ptop"><div><div class="pid">' + z.id + ' · ' + z.shelf + '</div><div class="pname">구역 ' + z.no + ' · ' + z.letters.join('/') + '</div></div>' +
+      '<span class="pstat">' + (bad ? faultsOf(z.id).length + '건' : '정상') + '</span></div><div class="pips">' + rows + '</div>';
+  };
+}
+function beltInner(id, name){
+  return function(bad){
+    return '<div class="ptop"><div class="pname">' + name + '</div><span class="pstat">' + (bad ? '걸림' : '정상') + '</span></div>' +
+      '<div class="beltline"></div><div class="pid">' + id + '</div>';
+  };
+}
+function armInner(id, name, glyph){
+  return function(bad){
+    return '<div class="pname" style="text-align:center">' + name + '</div><div class="armglyph">' + glyph + '</div>' +
+      '<div class="pid" style="text-align:center">' + (bad ? esc(faultsOf(id)[0].code) : id) + '</div>';
+  };
+}
+function viewWarehouse(){
+  var faults = S.faults.slice().sort(function(a, b){ return (a.seq || 0) - (b.seq || 0); });
+
+  var map =
+  '<div class="maplane"><div class="lanetag"><b>키캡 구역</b><span>선반 4개 · 카트리지 32 · 컨베이어 2</span></div>' +
+    '<div class="gridA">' +
+      partEl('zone1', zoneInner(ZONES[0])) + '<div></div>' + partEl('zone3', zoneInner(ZONES[2])) +
+      partEl('keycap_01_belt', beltInner('keycap_01_belt','키캡 컨베이어 1'), 'belt') +
+      partEl('keycap_arm', armInner('keycap_arm','키캡 로봇암','◧ pack'), 'arm') +
+      partEl('keycap_02_belt', beltInner('keycap_02_belt','키캡 컨베이어 2'), 'belt') +
+      partEl('zone2', zoneInner(ZONES[1])) + '<div></div>' + partEl('zone4', zoneInner(ZONES[3])) +
+    '</div></div>' +
+  '<div class="maplane"><div class="lanetag"><b>조립 · 출고 라인</b><span>보드 보관대 ' + boardTotal() + '/' + boardCap() + ' · 트레이 컨베이어 2 · AGV 대기</span></div>' +
+    '<div class="gridB">' +
+      '<div style="grid-column:3/5;display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        partEl('board_rack', function(bad){
+          var chips = COLORS.map(function(c){
+            var n = S.board[c];
+            return '<span class="pip' + (n === 0 ? ' out' : '') + '" style="background:' + CHEX[c] + ';opacity:' + (n ? 1 : .25) + '" title="' + CNAME[c] + ' ' + (n === undefined ? '?' : n) + '/' + boardMax(c) + '장"></span>';
+          }).join('');
+          return '<div class="ptop"><div><div class="pid">board_cartridge</div><div class="pname">보드 보관대</div></div>' +
+            '<span class="pstat">' + (bad ? '오류' : boardTotal() + '/' + boardCap()) + '</span></div><div class="piprow">' + chips + '</div>';
+        }) +
+        partEl('board_arm', armInner('board_arm','보드 로봇암','◨ board'), 'arm') +
+      '</div>' +
+      partEl('tray_arm', armInner('tray_arm','트레이 로봇암','▤ tray'), 'arm') +
+      partEl('tray_01_belt', beltInner('tray_01_belt','트레이 컨베이어 1'), 'belt') +
+      partEl('tray_02_belt', beltInner('tray_02_belt','트레이 컨베이어 2'), 'belt') +
+      partEl('agv_bay', function(bad){
+        return '<div class="pname">AGV</div><div class="bayglyph">AGV</div>' +
+          '<div class="pid">' + (bad ? esc(faultsOf('agv_bay')[0].code) : 'agv') + '</div>';
+      }, 'bay') +
+    '</div></div>' +
+  '<div>' + partEl('platform', function(bad){
+      return '<div class="ptop"><div><div class="pid">platform · stage_timeout · restart_unknown</div>' +
+        '<div class="pname">플랫폼 감지 · 단계 체류 시간 초과</div></div>' +
+        '<span class="pstat">' + (bad ? faultsOf('platform').length + '건' : '정상') + '</span></div>' +
+        '<div class="pid" style="color:var(--muted)">창고 보고가 아예 오지 않을 때 플랫폼이 잡아내는 신호</div>';
+    }) + '</div>';
+
+  var rows = faults.map(function(f){
+    var def = faultDef(f.code), pid = partOf(f);
+    return '<tr class="rowlink" data-fault-part="' + pid + '" data-act="locate-row">' +
+      '<td class="num" style="font-weight:600;color:var(--navy)">' + esc(f.wait) + '</td>' +
+      '<td><span class="badge">' + esc(def.label) + '</span></td>' +
+      '<td class="mono" style="font-size:11.5px">' + esc(f.code) + '</td>' +
+      '<td style="font-weight:600">' + esc(PARTS[pid].name) + (f.target ? ' <span class="mono" style="font-weight:400;color:var(--muted)">' + esc(f.target) + '</span>' : '') + '</td>' +
+      '<td>' + stageCell(f.stage) + '</td>' +
+      '<td style="color:var(--slate)">' + esc(def.fix) + '</td>' +
+      '<td><span class="actor ' + actorClass(def.actor) + '">' + esc(def.actor) + '</span></td>' +
+      '<td style="text-align:right;white-space:nowrap"><button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button> ' +
+        '<button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="그 자리에서 이어갈 수 없을 때">중단</button></td></tr>';
+  }).join('');
+
+  return '<div class="wrap">' + errBox(['faults','stock']) +
+    (S.faults.length
+      ? '<div class="alert"><div class="t"><span class="dot"></span>fault ' + S.faults.length + '건 · 조치 필요</div><div class="tags">' +
+        faults.map(function(f){ return '<span class="tag">' + esc(PARTS[partOf(f)].name) + ' · ' + esc(faultDef(f.code).label) + '</span>'; }).join('') + '</div></div>'
+      : (S.loaded.faults && !S.err.faults ? '<div class="alert good"><div class="t">활성 fault 없음 · 라인 정상</div></div>' : '')) +
+    '<div class="sechead"><h2>창고 도면</h2><span class="note">파트를 누르면 해당 fault 행이, fault 행을 누르면 해당 파트가 반짝입니다.</span></div>' +
+    '<div class="card mapbox"><div class="map">' + map + '</div></div>' +
+    '<div class="legend">' +
+      '<span><i style="background:var(--danger-soft);border:1px solid var(--danger)"></i>fault 발생 파트 · 배경 빨강</span>' +
+      '<span><i style="background:' + CHEX.y + ';outline:2px solid var(--warn);outline-offset:1px;margin-left:2px"></i>카트리지 부족(≤' + LOW_AT + ')</span>' +
+      '<span><i style="background:' + CHEX.b + ';outline:2px solid var(--danger);outline-offset:1px;margin-left:2px"></i>카트리지 소진(0)</span>' +
+    '</div>' +
+    '<div class="sechead" style="margin-top:6px"><h2>fault</h2><span class="note">주문당 1건. 진행 주문 없이 고장 난 칸·선반은 여기 나오지 않습니다.</span></div>' +
+    '<div class="card tablebox">' + (faults.length
+      ? '<table><thead><tr><th>대기번호</th><th>구분</th><th>fault</th><th>위치</th><th>멈춘 단계</th><th>조치 내용</th><th>수행 주체</th><th style="text-align:right">조치</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="empty">' + (S.loaded.faults ? 'fault가 없습니다.' : '불러오는 중…') + '</div>') + '</div>' +
+  '</div>';
+}
+
+/* ===================== 탭 5: 영수증 용지 (백엔드 미연동) ===================== */
+function viewPaper(){
+  var p = S.printer, pct = Math.round(p.qty / p.cap * 100), out = p.qty === 0, lowP = paperLow();
+  return '<div class="wrap" style="max-width:900px">' +
+    '<div class="alert warn"><div class="t"><span>⚠</span>백엔드 미연동</div><div style="font-size:12px;color:var(--warn-ink)">용지·프린터 API가 없어서 이 화면의 수치는 이 브라우저에만 있는 값입니다. 새로고침하면 초기화됩니다.</div></div>' +
+    (lowP ? '<div class="alert"><div class="t"><span>⚠</span>영수증 용지 부족</div><div class="tags">' +
+      '<span class="tag">' + p.name + ' · ' + (out ? '용지 소진' : p.qty + '매 남음') + '</span></div></div>' : '') +
+    '<div class="sechead"><h2>영수증 용지</h2><span class="note">키오스크 1대 · ' + p.qty + '매 남음</span></div>' +
+    '<div style="display:grid;grid-template-columns:minmax(250px,340px);gap:14px">' +
+      '<div class="card stcard' + (out ? ' help' : '') + '">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+          '<div style="font-size:15px;font-weight:700">' + p.name + '</div>' +
+          '<span class="badge' + (lowP ? '' : ' n') + '" style="' + (lowP ? '' : 'background:var(--ok-soft);color:var(--ok-ink)') + '">' + (out ? '용지 소진' : (lowP ? '부족' : '정상')) + '</span></div>' +
+        '<div style="display:flex;align-items:flex-end;gap:6px">' +
+          '<span class="mono" style="font-size:26px;font-weight:700;line-height:1;color:' + (lowP ? 'var(--danger-btn-fg)' : 'var(--navy)') + '">' + p.qty + '</span>' +
+          '<span style="font-size:12px;color:var(--faint-2)">/ ' + p.cap + '매</span></div>' +
+        '<div class="meter"><i style="width:' + pct + '%;background:' + (out ? 'var(--danger)' : (lowP ? 'var(--warn)' : 'var(--ok)')) + '"></i></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--muted)">마지막 교체</span><span class="mono">' + p.lastAt + '</span></div>' +
+      '</div></div>' +
+    '<button class="btn' + (lowP ? ' danger' : '') + '" data-act="fill-paper" type="button" style="height:40px;max-width:340px;font-size:13px;font-weight:600">' +
+      (lowP ? '용지 부족 · 용지 채우기' : '용지 채우기') + '</button>' +
+    '<div class="card" style="padding:14px 15px;display:flex;flex-direction:column;gap:6px">' +
+      '<div style="font-size:12.5px;font-weight:600;color:var(--slate)">용지 교체 내역</div>' +
+      (S.paperLog.length
+        ? S.paperLog.map(function(e){ return '<div class="logrow"><span class="mono" style="color:var(--faint)">' + e.time + '</span><span>' + esc(e.text) + '</span></div>'; }).join('')
+        : '<div style="font-size:12px;color:var(--faint)">아직 교체 내역이 없습니다.</div>') +
+    '</div></div>';
+}
+
+/* ===================== 탭 6: 운영 (영업 상태 · 리셋 · 스냅샷) ===================== */
+var RESET_DESC = {
+  zero:   ['zero', '디버깅 라운드 사이', '상태·진행 중 주문·대기열을 지우고 재고를 칸별 최대치(키캡 40 · 보드 3)로 채웁니다. 아카이브·일련번호는 남습니다.'],
+  mobius: ['mobius', '2·3일차 오픈 전 · 운영 중 사고', 'zero 뒤 Mobius 최신값(재고·AGV·진행 중 주문)으로 복구합니다. 대기열은 Mobius에 없어서 운영 중엔 대기열 보존이 필수입니다.'],
+  hard:   ['hard', '첫날 오픈 전 1회', 'zero + 아카이브·통계·일련번호까지 삭제합니다. 2일차부터 금지.']
+};
+function viewOps(){
+  var L = S.line;
+  var lineCard = '<div class="card opscard">' +
+    '<h3>영업 상태</h3>' +
+    '<p class="sub2">마감은 새 주문 접수만 막습니다. 대기열·진행 중 주문은 끝까지 갑니다. 리셋하면 자동으로 마감됩니다.</p>' +
+    (L
+      ? '<div class="statgrid">' +
+          '<div class="stat"><span>상태</span><b style="color:' + (L.status === 'open' ? 'var(--ok-ink)' : 'var(--warn-ink)') + '">' + (L.status === 'open' ? '접수 중' : '마감') + '</b></div>' +
+          '<div class="stat"><span>대기열</span><b>' + L.queue + '</b></div>' +
+          '<div class="stat"><span>진행 중</span><b>' + L.in_progress + '</b></div>' +
+          '<div class="stat"><span>남은 주문</span><b>' + L.remaining + '</b></div>' +
+          '<div class="stat"><span>AGV</span><b>' + esc(L.agv) + '</b></div>' +
+          '<div class="stat"><span>장비 종료</span><b style="color:' + (L.drained ? 'var(--ok-ink)' : 'var(--muted)') + '">' + (L.drained ? '가능' : '대기') + '</b></div>' +
+        '</div>' +
+        '<div class="muted" style="font-size:12px">마지막 전환 ' + esc(L.changed_at ? L.changed_at.replace('T', ' ').slice(0, 19) : '-') + '</div>' +
+        '<div class="toolbar">' +
+          (L.status === 'open'
+            ? '<button class="btn danger" data-act="line-set" data-v="closed" type="button">접수 마감</button>'
+            : '<button class="btn primary" data-act="line-set" data-v="open" type="button">접수 시작</button>') +
+        '</div>'
+      : '<div class="muted" style="font-size:12px">' + (S.err.line ? esc(S.err.line) : '불러오는 중…') + '</div>') +
+  '</div>';
+
+  var m = S.reset.mode;
+  var resetCard = '<div class="card opscard">' +
+    '<h3>리셋</h3>' +
+    '<p class="sub2">순서는 항상 리셋 → 스냅샷 확인(위반 0건) → 접수 시작. zero 뒤에 mobius를 따로 부르지 않습니다 (mobius 안에 zero가 들어 있음).</p>' +
+    '<div class="radios">' + ['zero','mobius','hard'].map(function(k){
+      var d = RESET_DESC[k];
+      return '<label><input type="radio" name="resetMode" value="' + k + '"' + (m === k ? ' checked' : '') + ' data-act="reset-mode"><span><b class="mono">' + d[0] + '</b> · ' + d[1] + '<small>' + d[2] + '</small></span></label>';
+    }).join('') + '</div>' +
+    '<label class="check"><input type="checkbox" id="resetKeepQueue"' + (S.reset.keep_queue ? ' checked' : '') + ' data-act="reset-keep"> 대기열 보존 (keep_queue)</label>' +
+    (m === 'hard'
+      ? '<div style="display:flex;flex-direction:column;gap:5px"><span class="muted" style="font-size:12px">확인 문구 — <span class="mono">HARD-RESET</span> 을 그대로 입력</span>' +
+        '<input class="inline-input" id="resetConfirm" autocomplete="off" value="' + esc(S.reset.confirm) + '" data-act="reset-confirm" placeholder="HARD-RESET"></div>'
+      : '') +
+    '<div class="toolbar"><button class="btn danger" data-act="reset-run" type="button">리셋 실행 · ' + m + '</button></div>' +
+    (S.resetResult
+      ? '<div style="display:flex;flex-direction:column;gap:6px"><div class="muted" style="font-size:12px">마지막 리셋 ' + S.resetResult.at + ' · ' + S.resetResult.mode + '</div>' +
+        '<pre class="pre">' + esc(JSON.stringify(S.resetResult.data, null, 2)) + '</pre></div>'
+      : '') +
+  '</div>';
+
+  var sn = S.snap, snapBody = '';
+  if(sn && sn.error) snapBody = '<div class="dlgerr">' + esc(sn.error) + '</div>';
+  else if(sn){
+    var d = sn.data || {}, v = d.violations || [], mw = d.mobius && d.mobius.warning;
+    snapBody = '<div class="alert ' + (d.ok ? 'good' : '') + '"><div class="t">' + (d.ok ? '정상 · 위반 0건' : '확인 필요 · 위반 ' + v.length + '건' + (mw ? ' · Mobius 불일치' : '')) + '</div>' +
+      (v.length ? '<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--danger-ink)">' + v.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+      (mw ? '<div style="font-size:12px;color:var(--danger-ink)">' + esc(typeof mw === 'string' ? mw : JSON.stringify(mw)) + '</div>' : '') +
+      '</div>' +
+      '<div class="muted" style="font-size:12px">' + sn.at + ' · ' + (d.elapsed_ms != null ? d.elapsed_ms + 'ms' : '') + '</div>' +
+      '<details><summary style="cursor:pointer;font-size:12px;color:var(--muted)">전체 JSON</summary><pre class="pre" style="margin-top:8px">' + esc(JSON.stringify(d, null, 2)) + '</pre></details>';
+  }
+  var snapCard = '<div class="card opscard">' +
+    '<h3>스냅샷 점검</h3>' +
+    '<p class="sub2">읽기 전용. Redis 상태끼리 맞는지(불변식) 검사합니다. 서버가 요청을 하나씩 처리하므로 운영 중 연타 금지.</p>' +
+    '<label class="check"><input type="checkbox" id="snapMobius"' + (S.snapMobius ? ' checked' : '') + ' data-act="snap-mobius"> Mobius cnt_process 와 대조 (?mobius=1)</label>' +
+    '<div class="toolbar"><button class="btn primary" data-act="snap-run" type="button"' + (S.snapBusy ? ' disabled' : '') + '>' + (S.snapBusy ? '점검 중…' : '스냅샷 점검') + '</button></div>' +
+    snapBody +
+  '</div>';
+
+  var connCard = '<div class="card opscard">' +
+    '<h3>연결</h3>' +
+    '<div class="dl" style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px"><span class="muted">API</span><span class="mono" style="word-break:break-all;text-align:right">' + esc(API_BASE) + '</span></div>' +
+    '<p class="sub2" style="margin:0">로컬 서버는 주소 뒤에 <span class="mono">?api=http://127.0.0.1:5000</span> 를 붙여 엽니다.</p>' +
+    '<div class="toolbar"><button class="btn" data-act="pw-forget" type="button"' + (ADMIN_PW ? '' : ' disabled') + '>' + (ADMIN_PW ? '기억한 비밀번호 지우기' : '기억한 비밀번호 없음') + '</button></div>' +
+  '</div>';
+
+  return '<div class="wrap">' + errBox(['line']) + '<div class="opsgrid">' + lineCard + snapCard + resetCard + connCard + '</div></div>';
+}
+
+/* ===================== 탭 7: 연동 현황 ===================== */
+function faultTableRows(){
+  var order = ['컨베이어','카트리지','로봇암','AGV','재고','플랫폼'], byG = {};
+  Object.keys(FAULTS).forEach(function(c){ (byG[FAULTS[c].g] = byG[FAULTS[c].g] || []).push(c); });
+  return order.map(function(g){
+    return (byG[g] || []).map(function(c, i){
+      var d = FAULTS[c];
+      return '<tr>' + (i === 0 ? '<td rowspan="' + byG[g].length + '" style="font-weight:600;vertical-align:top">' + g + '</td>' : '') +
+        '<td class="mono" style="font-size:11.5px">' + c + '</td>' +
+        '<td class="mono" style="font-size:11.5px;color:var(--muted)">' + esc(d.sec) + '</td>' +
+        '<td style="color:var(--muted)">' + esc(d.fix) + '</td>' +
+        '<td><span class="actor ' + actorClass(d.actor) + '">' + d.actor + '</span></td></tr>';
+    }).join('');
+  }).join('');
+}
+function viewGuide(){
+  var rows = [
+    ['모든 주문', 'GET /admin/orders · GET /order/&lt;id&gt;/qr', 'POST /admin/order/&lt;id&gt;/abort 🔒'],
+    ['조립대 상태', 'GET /admin/stations · GET /admin/calls', 'POST /admin/station/&lt;sid&gt;/call/ok · …/call (테스트) · abort 🔒'],
+    ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill'],
+    ['창고 상태', 'GET /admin/faults · GET /admin/stock', 'POST /admin/order/&lt;id&gt;/fault/clear 🔒 · abort 🔒'],
+    ['운영', 'GET /admin/line · GET /admin/debug/snapshot', 'POST /admin/line 🔒 · POST /admin/reset 🔒'],
+    ['헤더', 'GET /admin/calls · /admin/line · /admin/stock', '영업 상태 칩 → POST /admin/line 🔒']
+  ].map(function(r){ return '<tr><td style="font-weight:600">' + r[0] + '</td><td class="mono" style="font-size:11.5px">' + r[1] + '</td><td class="mono" style="font-size:11.5px">' + r[2] + '</td></tr>'; }).join('');
+  return '<div class="wrap doc">' +
+  '<div><div class="eyebrow">admin.py 연동</div>' +
+  '<h2 style="font-size:22px;margin-top:6px">탭별 API</h2>' +
+  '<p class="lede">🔒 표시는 관리자 비밀번호(<code>STATION_RESET_PASSWORD</code>)가 필요한 동작입니다. 확인 창에서 한 번 입력하면 이 탭을 닫을 때까지 기억합니다. 데이터는 보고 있는 탭을 10초마다, 헤더(도움 요청·영업 상태·재고)는 30초마다, 전체는 60초마다 다시 읽습니다. 브라우저 탭이 가려져 있으면 읽지 않습니다. 조작 직후에는 바로 전체를 다시 읽습니다.</p></div>' +
+  '<div class="card tablebox" style="margin-top:11px"><table style="min-width:640px"><thead><tr><th>탭</th><th>읽기</th><th>쓰기</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+
+  '<h2>연동되지 않은 것</h2>' +
+  '<ul>' +
+    '<li><b>영수증 용지 · 영수증 출력</b> — 백엔드에 용지·프린터 API가 없습니다. 용지 탭은 이 브라우저에만 있는 값이고, 출력 버튼은 꺼 두었습니다.</li>' +
+    '<li><b>AGV 긴급정지</b> — AGV로 정지 명령을 보내는 경로가 없습니다. 눌러도 아무 일이 안 일어나는 비상 버튼은 위험해서 비활성으로 두었습니다.</li>' +
+    '<li><b>테스트 fault 주입 · 전체 해제</b> — API가 없어 뺐습니다.</li>' +
+    '<li><b>진행 주문 없이 죽은 칸·선반</b> — fault가 주문에 붙는 구조라 표시되지 않습니다.</li>' +
+    '<li><b>3일 총 공급량 대비 남은 수량</b> — <code>WAREHOUSE_MAX</code>(3일 최종 개수)는 아직 API로 나가지 않습니다.</li>' +
+  '</ul>' +
+
+  '<h2>표시 규칙</h2>' +
+  '<ul>' +
+    '<li><b>대기번호</b>는 <code>order_seq</code> 그대로입니다.</li>' +
+    '<li><b>사용자상태</b>는 백엔드에 없는 값이라 단계에서 계산합니다 — 접수~출고 대기 = 대기중, AGV 적재·조립대 도착 = 호출중, 인증·수령 = 조립중, 완료 = 조립완료, 미수령 = 미수령, 사유가 있는 종료(관리자 중단·타임아웃 등) = 종료.</li>' +
+    '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 40 · 보드 3 (서버 <code>config</code> 값).</li>' +
+    '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
+    '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
+  '</ul>' +
+
+  '<h2>fault ↔ 위치</h2>' +
+  '<p>도면 파트는 <code>fault_section</code>(<code>part[:scope[:slot]]</code>)의 앞부분으로 정합니다. 선반은 구역과 1:1입니다 — keycap1 = E/I, keycap2 = S/N, keycap3 = T/F, keycap4 = J/P. <code>stage_timeout</code>·<code>restart_unknown</code>은 플랫폼 감지로 모읍니다.</p>' +
+  '<div class="card tablebox" style="margin-top:11px"><table style="min-width:640px"><thead><tr><th>구분</th><th>fault</th><th>fault_section</th><th>조치</th><th>수행 주체</th></tr></thead><tbody>' + faultTableRows() + '</tbody></table></div>' +
+  '<hr><p style="color:var(--muted);font-size:12.5px">접속 주소: <span class="mono">' + esc(API_BASE) + '</span></p></div>';
+}
+
+/* ===================== 렌더 ===================== */
+function renderHeader(){
+  var lows = lowCarts().length + outCarts().length;
+  var help = callCount();
+  var h = '';
+  if(S.line) h += '<button class="chip-line ' + (S.line.status === 'open' ? 'open' : 'closed') + '" data-act="line-chip" type="button" title="눌러서 전환"><i></i>' + (S.line.status === 'open' ? '접수 중' : '접수 마감') + (S.line.remaining ? ' · 남은 ' + S.line.remaining : '') + '</button>';
+  var errs = Object.keys(S.err).filter(function(k){ return S.err[k]; });
+  if(errs.length) h += '<div class="chip-alert" title="' + esc(errs.map(function(k){ return k + ': ' + S.err[k]; }).join('\n')) + '">연결 오류 ' + errs.length + '</div>';
+  if(lows) h += '<div class="chip-alert"><span class="dot"></span>재고 부족 ' + lows + '건</div>';
+  if(paperLow()) h += '<div class="chip-alert">용지 부족</div>';
+  if(help) h += '<div class="chip-alert solid"><span class="dot" style="background:#fff"></span>도움 요청 ' + help + '건</div>';
+  document.getElementById('hdrAlerts').innerHTML = h;
+
+  document.getElementById('tabs').innerHTML = TABS.map(function(t){
+    var n = tabCount(t.id);
+    return '<button class="tab" role="tab" aria-selected="' + (S.tab === t.id) + '" data-act="tab" data-v="' + t.id + '" type="button">' +
+      t.label + (n !== '' ? '<span class="pill">' + n + '</span>' : '') + '</button>';
+  }).join('');
+}
+/* 바뀐 내용이 있을 때만 DOM 을 갈아 끼운다 — 폴링마다 통째로 다시 그리면 깜박이고 hover·펼침 상태가 풀린다 */
+var lastMainHtml = null, lastAsideHtml = null;
+function renderMain(){
+  var main = document.getElementById('main');
+  var aside = document.getElementById('aside');
+  var a = document.activeElement;
+  var fid = a && a.id ? a.id : null;
+  var sel = (a && typeof a.selectionStart === 'number') ? a.selectionStart : null;
+  var views = {orders:viewOrders, stations:viewStations, stock:viewStock, wh:viewWarehouse, paper:viewPaper, ops:viewOps, guide:viewGuide};
+  var mainHtml = (views[S.tab] || viewOrders)();
+  var asideHtml = (S.tab === 'orders' && S.detailId) ? viewDetail() : '';
+  S.detailEnter = false;
+  var changed = false;
+  if(mainHtml !== lastMainHtml){
+    var scroll = main.scrollTop;
+    main.innerHTML = mainHtml;
+    main.scrollTop = scroll;
+    lastMainHtml = mainHtml; changed = true;
+  }
+  if(asideHtml !== lastAsideHtml){
+    var ascroll = aside.firstElementChild ? aside.firstElementChild.scrollTop : 0;
+    aside.innerHTML = asideHtml;
+    if(aside.firstElementChild) aside.firstElementChild.scrollTop = ascroll;
+    lastAsideHtml = asideHtml; changed = true;
+  }
+  if(changed && fid && !S.dialog){
+    var el = document.getElementById(fid);
+    if(el){ el.focus(); if(sel !== null && el.setSelectionRange){ try{ el.setSelectionRange(sel, sel); }catch(e){} } }
+  }
+}
+function render(){ renderHeader(); renderMain(); renderOverlay(); }
+
+function renderOverlay(){
+  var ov = document.getElementById('overlay'), html = '';
+  var rc = S.orders.filter(function(o){ return o.orderNo === S.receiptId; })[0];
+  if(rc){
+    html += '<div class="scrim" data-act="close-receipt" style="z-index:45"><div class="receipt">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
+        '<div style="display:flex;flex-direction:column;gap:3px">' +
+          '<div class="mono" style="font-size:11px;color:var(--faint-2);letter-spacing:.08em">대기번호</div>' +
+          '<div class="mono" style="font-size:30px;font-weight:700;letter-spacing:-.02em">' + esc(rc.waitNo) + '</div></div>' +
+        '<button class="xbtn" data-act="close-receipt" type="button">✕</button></div>' +
+      '<div class="dashed">' +
+        '<div class="dl"><span>주문번호</span><span class="mono">' + esc(rc.orderNo) + '</span></div>' +
+        '<div class="dl"><span>MBTI</span><span class="mono" style="font-weight:700;letter-spacing:.06em">' + esc(rc.mbti) + '</span></div>' +
+        '<div class="dl"><span>키캡 색상</span><span style="display:flex;gap:4px">' + capTiles(rc) + '</span></div>' +
+        '<div class="dl"><span>보드 색상</span><span style="display:inline-flex;align-items:center;gap:7px"><span class="sw" style="width:18px;height:18px;background:' + (CHEX[rc.boardColor] || '#ccc') + '"></span>' + (CNAME[rc.boardColor] || esc(rc.boardColor)) + '</span></div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:9px">' +
+        '<div id="qrbox"><img class="qrimg" alt="주문 QR" src="' + esc(API_BASE + '/order/' + encodeURIComponent(rc.orderNo) + '/qr') + '" data-qr="1"></div>' +
+        '<div class="mono" style="font-size:10.5px;color:var(--faint);letter-spacing:.06em">QR · ' + esc(rc.orderNo) + '</div></div>' +
+      '<button class="btn primary" type="button" style="height:36px" disabled title="출력 API 없음">영수증 출력 · 미연동</button>' +
+      '</div></div>';
+  }
+  var d = S.dialog;
+  if(d){
+    html += '<div class="scrim" data-act="dialog-scrim"><div class="modal" role="dialog" aria-modal="true">' +
+      '<h3>' + esc(d.title) + '</h3><p>' + d.body + '</p>' +
+      (d.kv && d.kv.length ? '<div class="kv">' + d.kv.map(function(r){ return '<div><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>'; }).join('') + '</div>' : '') +
+      (d.discard
+        ? '<div class="radios" style="margin-top:8px">' +
+            '<label><input type="radio" name="dlgDiscard" value="1"' + (d.discardValue !== false ? ' checked' : '') + '><span>AGV가 폐기장소로 가져간다<small>미수령과 같은 길 · 폐기 보고가 오면 조립대가 풀립니다</small></span></label>' +
+            '<label><input type="radio" name="dlgDiscard" value="0"' + (d.discardValue === false ? ' checked' : '') + '><span>트레이를 사람이 이미 회수했다<small>완료로 끝냅니다</small></span></label>' +
+          '</div>'
+        : '') +
+      (d.pw ? '<label class="pwrow">관리자 비밀번호<input id="dlgPw" type="password" autocomplete="off" value="' + esc(d.pwValue || '') + '"' + (d.busy ? ' disabled' : '') + '></label>' : '') +
+      (d.err ? '<div class="dlgerr">' + esc(d.err) + '</div>' : '') +
+      '<div class="acts">' +
+        (d.info ? '' : '<button class="btn" data-act="dialog-cancel" type="button"' + (d.busy ? ' disabled' : '') + '>취소</button>') +
+        '<button class="btn ' + (d.tone || 'primary') + '" data-act="dialog-ok" type="button" style="flex:1.4"' + (d.busy ? ' disabled' : '') + '>' + (d.busy ? '처리 중…' : esc(d.ok || '확인')) + '</button>' +
+      '</div></div></div>';
+  }
+  ov.innerHTML = html;
+  var img = ov.querySelector('img[data-qr]');
+  if(img) img.addEventListener('error', function(){
+    var box = document.getElementById('qrbox');
+    if(box) box.innerHTML = '<div class="qrgone">QR을 불러오지 못했습니다<br>종료 10분 뒤 주문 정보가 만료됩니다</div>';
+  });
+  if(d && d.pw && !d.busy){
+    var pw = document.getElementById('dlgPw');
+    if(pw && !pw.value) pw.focus();
+  }
+}
+
+/* ===================== locate ===================== */
+function locate(pid){
+  [].slice.call(document.querySelectorAll('[data-part="' + pid + '"],[data-fault-part="' + pid + '"]')).forEach(function(el){
+    el.classList.remove('is-locating');
+    void el.offsetWidth;
+    el.classList.add('is-locating');
+    setTimeout(function(){ el.classList.remove('is-locating'); }, 1700);
+  });
+  var first = document.querySelector('[data-part="' + pid + '"]');
+  if(first && first.scrollIntoView) first.scrollIntoView({block:'nearest', inline:'nearest', behavior:'smooth'});
+}
+
+/* ===================== 확인 창 ===================== */
+/* d: {title, body(html), kv, ok, tone, pw, discard, info, run: async(vals) → 다음 확인 창(선택)} */
+function ask(d){
+  d.err = null; d.busy = false;
+  if(d.pw) d.pwValue = ADMIN_PW || '';
+  S.dialog = d;
+  renderOverlay();
+}
+function info(title, body, kv){ ask({info:true, title:title, body:body, kv:kv, ok:'확인'}); }
+
+async function confirmDialog(){
+  var d = S.dialog;
+  if(!d || d.busy) return;
+  if(d.info || !d.run){ S.dialog = null; renderOverlay(); return; }
+  var vals = {};
+  if(d.pw){
+    var el = document.getElementById('dlgPw');
+    d.pwValue = el ? el.value : '';
+    if(!d.pwValue){ d.err = '비밀번호를 입력하세요'; renderOverlay(); return; }
+    vals.password = d.pwValue;
+  }
+  if(d.discard){
+    var ch = document.querySelector('input[name="dlgDiscard"]:checked');
+    d.discardValue = !ch || ch.value === '1';
+    vals.discard = d.discardValue;
+  }
+  d.busy = true; d.err = null; renderOverlay();
+  try {
+    var next = await d.run(vals);
+    if(d.pw) ADMIN_PW = d.pwValue;
+    if(S.dialog === d) S.dialog = null;
+    if(next) ask(next); else renderOverlay();
+    renderHeader(); renderMain();
+    refresh(2);
+  } catch(e){
+    d.busy = false;
+    d.err = e.message;
+    if(e.status === 400 && /비밀번호/.test(e.message)) d.pwValue = '';
+    renderOverlay();
+  }
+}
+
+function faultDialog(f, lead){
+  var def = faultDef(f.code), pid = partOf(f);
+  var warn = (f.stage === 'assigned' || f.stage === 'keycap_mismatched')
+    ? '<br><br>해제하면 출고 지시 마감(60초)이 다시 걸립니다. 창고가 그 안에 재배출을 시작하지 않으면 <b>stage_timeout</b>이 다시 붙습니다.' : '';
+  return {
+    title: 'fault 해제 · 대기번호 ' + f.wait,
+    body: (lead ? lead + '<br><br>' : '') + '현장 조치를 마쳤나요? 해제하면 단계(<b>' + esc(stageLabel(f.stage)) + '</b>)는 그대로 두고 그 자리에서 이어갑니다. fault가 빠진 공정 스냅샷이 나가면 ' + esc(def.actor) + ' 쪽이 다시 진행합니다.' + warn,
+    kv: [['fault', f.code], ['위치', PARTS[pid].name + (f.target ? ' · ' + f.target : '')], ['대기번호', f.wait], ['멈춘 단계', stageLabel(f.stage)], ['조치', def.fix]],
+    ok: 'fault 해제', tone: 'danger', pw: true,
+    run: async function(v){
+      var r = await api('POST', '/admin/order/' + encodeURIComponent(f.id) + '/fault/clear', {password: v.password});
+      say(r.cleared + ' 해제 · ' + stageLabel(r.stage) + '에서 이어감');
+    }
+  };
+}
+
+/* 이 주문만 중단 — 조립대 초기화 · 주문 상세 · fault 행에서 같이 쓴다 */
+function abortDialog(o){   /* o: {id, seq, stage, sid} */
+  var st = o.stage, body, discard = false;
+  if(st === 'queued') body = '대기열에서 빼고 끝냅니다.';
+  else if(WAREHOUSE_STAGES.indexOf(st) >= 0) body = '<b>벨트 위 트레이·부품을 먼저 치웠나요?</b> 창고가 풀리면 바로 다음 주문이 배정돼 벨트가 다시 돕니다.';
+  else if(st === 'pickup_reached') body = '픽업대에 있는 트레이는 사람이 회수해야 합니다.';
+  else if(st === 'loaded' || st === 'arrived'){ body = 'AGV가 싣고 있는 트레이를 어떻게 처리할지 고르세요.'; discard = true; }
+  else if(st === 'verified' || st === 'received') body = '손님 앞에 있는 주문입니다. 완료로 끝냅니다.';
+  else if(st === 'unclaimed') body = '폐기 보고를 기다리지 않고 조립대를 강제로 풉니다.';
+  else body = '이 주문만 끝냅니다.';
+  var seq = o.seq != null ? String(o.seq) : '-';
+  ask({
+    title: '주문 중단 · 대기번호 ' + seq,
+    body: body + ' 다른 주문은 건드리지 않고, 완료 통계에서는 빠집니다 (reason=admin_abort).',
+    kv: [['주문번호', o.id], ['단계', stageLabel(st)], ['조립대', o.sid ? stNo(o.sid) : '배정 전']],
+    ok: '주문 중단', tone: 'danger', pw: true, discard: discard, discardValue: true,
+    run: async function(v){
+      var payload = {password: v.password};
+      if(discard) payload.discard = v.discard !== false;
+      var r = await api('POST', '/admin/order/' + encodeURIComponent(o.id) + '/abort', payload);
+      var kv = [['이전 단계', stageLabel(r.from_stage)], ['최종 단계', stageLabel(r.final_stage)]];
+      if(r.fault) kv.push(['남아 있던 fault', r.fault]);
+      if(r.assigned_next && r.assigned_next.length) kv.push(['새로 배정', r.assigned_next.join(', ')]);
+      return {info:true, title:'중단 완료 · 대기번호 ' + seq, body: esc(r.action || '처리되었습니다.'), kv:kv, ok:'확인'};
+    }
+  });
+}
+
+/* 방금 채운 칸 때문에 멈춘 주문 → fault 해제 확인 창으로 이어간다 */
+function followUpFault(slots){
+  var f = S.faults.filter(function(x){
+    return (x.code === 'keycap_empty' || x.code === 'board_empty') && slots.indexOf(x.target) >= 0;
+  })[0];
+  return f ? faultDialog(f, '<b>방금 채운 칸(' + esc(f.target) + ') 때문에 멈춘 주문이 있습니다.</b> 재고를 채워도 fault는 남아 있어서 해제해야 이어집니다.') : null;
+}
+
+var ASK = {
+  resolveHelp: function(sid){
+    var c = S.calls[sid];
+    if(!c){ say('호출 중이 아닙니다'); return; }
+    ask({title: '조립대 ' + stNo(sid) + ' 호출 해결',
+      body: '현장 응대를 마쳤나요? 해결하면 호출 표시가 내려가고, 진행 중 주문은 지금부터 기본 마감을 다시 잽니다.',
+      kv: [['조립대', stNo(sid)], ['대기번호', c.order_seq != null ? String(c.order_seq) : '주문 없음'], ['호출 시각', hhmm(c.called_at)], ['누른 횟수', (c.count || 1) + '회']],
+      ok: '호출 해결', tone: 'danger',
+      run: async function(){
+        var r = await api('POST', '/admin/station/' + encodeURIComponent(sid) + '/call/ok');
+        say('조립대 ' + stNo(sid) + ' 호출 해결 · ' + fmtSec(r.waited_sec) + ' 대기');
+      }});
+  },
+  resetStation: function(sid){
+    var s = S.stations.filter(function(x){ return x.sid === sid; })[0];
+    if(!s || !s.order){ say('배정된 주문이 없습니다'); return; }
+    abortDialog({id:s.order.order_id, seq:s.order.order_seq, stage:s.order.stage, sid:sid});
+  },
+  fillPaper: function(){
+    var p = S.printer;
+    ask({title: '영수증 용지 채우기 · 미연동',
+      body: '키오스크 용지를 ' + p.cap + '매(가득)로 기록합니다. 서버에는 저장되지 않고 이 브라우저에만 남습니다.',
+      kv: [['현재', p.qty + ' / ' + p.cap + '매'], ['교체 후', p.cap + ' / ' + p.cap + '매']],
+      ok: '채우기 완료',
+      run: async function(){
+        var t = now();
+        S.paperLog = [{time:t, text:p.name + ' 용지 채움 · ' + p.qty + ' → ' + p.cap + '매'}].concat(S.paperLog).slice(0, 8);
+        S.printer = Object.assign({}, p, {qty:p.cap, lastAt:t});
+        say('키오스크 용지 채움 (로컬 기록)');
+      }});
+  },
+  resolveFault: function(id){
+    var f = S.faults.filter(function(x){ return x.id === id; })[0];
+    if(f) ask(faultDialog(f));
+  },
+  abortFault: function(id){
+    var f = S.faults.filter(function(x){ return x.id === id; })[0];
+    if(f) abortDialog({id:f.id, seq:f.seq, stage:f.stage, sid:f.sid});
+  },
+  abortOrder: function(no){
+    var o = S.orders.filter(function(x){ return x.orderNo === no; })[0];
+    if(o) abortDialog({id:o.orderNo, seq:o.seq, stage:o.stage, sid:o.sid});
+  },
+  refillCart: function(key){
+    var n = S.stock[key], max = keyMax(key);
+    if(n === undefined){ say(key + ' 재고 데이터가 아직 없습니다'); return; }
+    if(n >= max){ say(key + ' 는 이미 가득 찼습니다'); return; }
+    ask({title: '카트리지 교체 · ' + key,
+      body: '카트리지를 가득(' + max + '개) 채운 것으로 기록합니다. 실제 교체를 완료했나요?',
+      kv: [['카트리지', key], ['현재', n + ' / ' + max], ['교체 후', max + ' / ' + max]],
+      ok: '교체 완료',
+      run: async function(){
+        var r = await api('POST', '/admin/stock/refill', {part:key, count:max});
+        S.stock[key] = r.count;
+        addLog(key + ' 카트리지 교체 · ' + n + ' → ' + r.count + '개' + (r.status === 'disable' ? ' (고장 상태 유지)' : ''));
+        say(key + ' 교체 완료');
+        return followUpFault([key]);
+      }});
+  },
+  loadBoard: function(c){
+    var n = S.board[c], max = boardMax(c);
+    if(n === undefined){ say('보드 ' + CNAME[c] + ' 재고 데이터가 아직 없습니다'); return; }
+    if(n >= max){ say('보드 ' + CNAME[c] + ' 는 이미 가득 찼습니다'); return; }
+    ask({title: '보드 보관대 · ' + CNAME[c] + ' 채우기',
+      body: CNAME[c] + ' 칸을 가득(' + max + '장) 채운 것으로 기록합니다. 실제로 넣었나요?',
+      kv: [['칸', c], ['현재', n + ' / ' + max], ['채운 후', max + ' / ' + max]],
+      ok: '채우기 완료',
+      run: async function(){
+        var r = await api('POST', '/admin/stock/refill', {part:c, count:max});
+        S.board[c] = r.count;
+        addLog('보드 ' + CNAME[c] + ' 채움 · ' + n + ' → ' + r.count + '장');
+        say('보드 ' + CNAME[c] + ' 채우기 완료');
+        return followUpFault([c]);
+      }});
+  },
+  refillLow: function(){
+    var targets = outCarts().concat(lowCarts());
+    if(!targets.length){ say('부족한 카트리지가 없습니다'); return; }
+    ask({title: '부족·소진 카트리지 일괄 교체',
+      body: '아래 카트리지를 모두 가득 채운 것으로 기록합니다. 한 칸씩 차례로 보냅니다.',
+      kv: targets.map(function(k){ return [k, S.stock[k] + ' → ' + keyMax(k)]; }),
+      ok: targets.length + '개 교체 완료',
+      run: async function(){
+        var ok = [], fail = [];
+        for(var i = 0; i < targets.length; i++){
+          var k = targets[i];
+          try { var r = await api('POST', '/admin/stock/refill', {part:k, count:keyMax(k)}); S.stock[k] = r.count; ok.push(k); }
+          catch(e){ fail.push(k + ' (' + e.message + ')'); }
+        }
+        if(ok.length) addLog(ok.length + '개 카트리지 일괄 교체 · ' + ok.join(', '));
+        if(fail.length) return {info:true, title:'일괄 교체 · 일부 실패', body:'성공 ' + ok.length + '개 · 실패 ' + fail.length + '개', kv:fail.map(function(x){ return ['실패', x]; }), ok:'확인'};
+        say(ok.length + '개 카트리지 교체 완료');
+        return followUpFault(ok);
+      }});
+  },
+  line: function(next){
+    var open = next === 'open';
+    ask({title: open ? '주문 접수 시작' : '주문 접수 마감',
+      body: open
+        ? '키오스크가 새 주문을 받기 시작합니다. 리셋 뒤라면 스냅샷 확인(위반 0건)을 마쳤나요?'
+        : '새 주문 접수만 막습니다. 대기열과 진행 중 주문은 끝까지 갑니다. 운영 탭에서 남은 주문이 0이 되고 AGV가 돌아오면 장비를 꺼도 됩니다.',
+      kv: S.line ? [['현재', S.line.status === 'open' ? '접수 중' : '마감'], ['남은 주문', String(S.line.remaining)]] : null,
+      ok: open ? '접수 시작' : '접수 마감', tone: open ? 'primary' : 'danger', pw: true,
+      run: async function(v){
+        var r = await api('POST', '/admin/line', {password:v.password, status:next});
+        S.line = r;
+        say(open ? '주문 접수 시작' : '주문 접수 마감');
+      }});
+  },
+  reset: function(){
+    var m = S.reset.mode;
+    if(m === 'hard' && S.reset.confirm !== 'HARD-RESET'){ say('hard 는 확인 문구 HARD-RESET 을 정확히 입력해야 합니다'); return; }
+    ask({title: '리셋 · ' + m,
+      body: RESET_DESC[m][2] + ' 끝나면 영업 상태가 자동으로 <b>마감</b>이 됩니다.',
+      kv: [['mode', m], ['대기열 보존', S.reset.keep_queue ? '예' : '아니오']],
+      ok: '리셋 실행', tone: 'danger', pw: true,
+      run: async function(v){
+        var body = {password:v.password, mode:m, keep_queue:S.reset.keep_queue};
+        if(m === 'hard') body.confirm = S.reset.confirm;
+        var r = await api('POST', '/admin/reset', body);
+        S.resetResult = {at:now(), mode:m, data:r};
+        S.reset.confirm = '';
+        say('리셋 완료 · 스냅샷 확인 뒤 접수를 시작하세요');
+      }});
+  }
+};
+
+async function runSnapshot(){
+  if(S.snapBusy) return;
+  S.snapBusy = true; renderMain();
+  try { S.snap = {at:now(), data: await api('GET', '/admin/debug/snapshot' + (S.snapMobius ? '?mobius=1' : ''))}; }
+  catch(e){ S.snap = {at:now(), error:e.message}; }
+  S.snapBusy = false; renderMain();
+}
+function quick(method, path, okMsg){
+  api(method, path).then(function(){ say(okMsg); }).catch(function(e){ say(e.message); }).then(function(){ refresh(2); });
+}
+
+/* ===================== 이벤트 ===================== */
+document.addEventListener('click', function(ev){
+  var t = ev.target.closest('[data-act]');
+  if(!t || t.disabled) return;
+  var act = t.getAttribute('data-act');
+  var no = t.getAttribute('data-no');
+  var sid = t.getAttribute('data-sid');
+
+  if(act === 'tab'){ S.tab = t.getAttribute('data-v'); render(); document.getElementById('main').scrollTop = 0; refresh(0); return; }
+  if(act === 'filter'){ S.filter = t.getAttribute('data-v'); render(); return; }
+  if(act === 'line-chip'){ if(S.line) ASK.line(S.line.status === 'open' ? 'closed' : 'open'); return; }
+
+  /* 주문 */
+  if(act === 'toggle-sel'){
+    ev.stopPropagation();
+    S.sel = S.sel.indexOf(no) >= 0 ? S.sel.filter(function(x){ return x !== no; }) : S.sel.concat([no]);
+    render(); return;
+  }
+  if(act === 'toggle-all'){
+    ev.stopPropagation();
+    var vis = visibleOrders().map(function(o){ return o.orderNo; });
+    var all = vis.every(function(x){ return S.sel.indexOf(x) >= 0; });
+    S.sel = all ? [] : vis;
+    render(); return;
+  }
+  if(act === 'open-order'){
+    if(S.detailId !== no){ S.detailEnter = !S.detailId; S.detailId = no; render(); }   /* 등장 효과는 패널이 닫혀 있다 열릴 때만 */
+    return;
+  }
+  if(act === 'close-detail'){ S.detailId = null; render(); return; }
+  if(act === 'receipt'){ ev.stopPropagation(); S.receiptId = no; renderOverlay(); return; }
+  if(act === 'close-receipt'){ if(ev.target === t){ S.receiptId = null; renderOverlay(); } return; }
+  if(act === 'abort-order'){ ASK.abortOrder(no); return; }
+
+  /* 조립대 */
+  if(act === 'resolve-help'){ ASK.resolveHelp(sid); return; }
+  if(act === 'reset-station'){ ASK.resetStation(sid); return; }
+  if(act === 'raise-help'){ quick('POST', '/admin/station/' + encodeURIComponent(sid) + '/call', '조립대 ' + stNo(sid) + ' 호출 발생(테스트)'); return; }
+
+  /* 용지 */
+  if(act === 'fill-paper'){ ASK.fillPaper(); return; }
+
+  /* 창고 상태 */
+  if(act === 'locate-part'){
+    var pid = t.getAttribute('data-part'), n2 = faultsOf(pid).length;
+    locate(pid);
+    say(PARTS[pid].name + ' · ' + (n2 ? '활성 fault ' + n2 + '건' : '활성 fault 없음'));
+    return;
+  }
+  if(act === 'locate-row'){
+    var row = t.closest('[data-fault-part]');
+    if(row) locate(row.getAttribute('data-fault-part'));
+    return;
+  }
+  if(act === 'resolve-fault'){ ev.stopPropagation(); ASK.resolveFault(t.getAttribute('data-fault')); return; }
+  if(act === 'abort-fault'){ ev.stopPropagation(); ASK.abortFault(t.getAttribute('data-fault')); return; }
+
+  /* 재고 */
+  if(act === 'refill-cart'){ ASK.refillCart(t.getAttribute('data-key')); return; }
+  if(act === 'load-board'){ ASK.loadBoard(t.getAttribute('data-color')); return; }
+  if(act === 'refill-low'){ ASK.refillLow(); return; }
+
+  /* 운영 */
+  if(act === 'line-set'){ ASK.line(t.getAttribute('data-v')); return; }
+  if(act === 'reset-run'){ ASK.reset(); return; }
+  if(act === 'snap-run'){ runSnapshot(); return; }
+  if(act === 'pw-forget'){ ADMIN_PW = null; say('기억한 비밀번호를 지웠습니다'); renderMain(); return; }
+
+  /* 확인 창 */
+  if(act === 'dialog-cancel'){ if(!S.dialog || !S.dialog.busy){ S.dialog = null; renderOverlay(); } return; }
+  if(act === 'dialog-scrim'){ if(ev.target === t && S.dialog && !S.dialog.busy){ S.dialog = null; renderOverlay(); } return; }
+  if(act === 'dialog-ok'){ confirmDialog(); return; }
+}, false);
+
+document.addEventListener('change', function(ev){
+  var act = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act');
+  if(act === 'reset-mode'){ S.reset.mode = ev.target.value; S.reset.confirm = ''; renderMain(); }
+  if(act === 'reset-keep'){ S.reset.keep_queue = ev.target.checked; }
+  if(act === 'snap-mobius'){ S.snapMobius = ev.target.checked; }
+}, false);
+document.addEventListener('input', function(ev){
+  var act = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-act');
+  if(act === 'query'){ S.query = ev.target.value; renderMain(); }
+  if(act === 'reset-confirm'){ S.reset.confirm = ev.target.value; }
+}, false);
+document.addEventListener('keydown', function(ev){
+  if(ev.key === 'Enter' && ev.target && ev.target.id === 'dlgPw'){ ev.preventDefault(); confirmDialog(); return; }
+  if(ev.key !== 'Escape') return;
+  if(S.dialog){ if(!S.dialog.busy){ S.dialog = null; renderOverlay(); } return; }
+  if(S.receiptId){ S.receiptId = null; renderOverlay(); return; }
+  if(S.detailId){ S.detailId = null; render(); }
+}, false);
+
+/* ===================== 시작 ===================== */
+function clockTick(){ document.getElementById('clock').textContent = now(); }
+clockTick(); setInterval(clockTick, 10000);
+render();
+refresh(2);
+setInterval(function(){
+  if(document.hidden) return;
+  var t = Date.now(), slack = 500;
+  refresh(t - lastAllAt >= POLL_ALL_MS - slack ? 2 : (t - lastHeaderAt >= POLL_HEADER_MS - slack ? 1 : 0));
+}, POLL_TAB_MS);
+/* 다른 탭에 있다 돌아왔을 때 오래됐으면 한 번 갱신 */
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && Date.now() - lastAnyAt >= POLL_TAB_MS) refresh(1);
+});
+})();
+</script>
+
+</body>
+</html>
