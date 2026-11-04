@@ -859,6 +859,9 @@ function viewStations(){
             '<button class="btn danger" data-act="resolve-help" data-sid="' + s.sid + '" type="button">호출 해결</button>' +
           '</div>'
         : '') +
+      (o && userStatus(o) === '호출중'
+        ? '<button class="btn primary" data-act="verify-station" data-sid="' + s.sid + '" type="button"' + (o.stage === 'arrived' ? '' : ' disabled title="AGV가 조립대에 도착한 뒤 인증할 수 있습니다"') + '>QR 인증 대신 처리</button>'
+        : '') +
       '<div style="display:flex;gap:6px">' +
         '<button class="btn" data-act="reset-station" data-sid="' + s.sid + '" type="button" style="flex:1"' + (o ? '' : ' disabled title="배정된 주문이 없습니다"') + '>초기화 · 주문 중단</button>' +
         (!help ? '<button class="btn" data-act="raise-help" data-sid="' + s.sid + '" type="button" style="border-style:dashed;color:var(--faint);font-size:11.5px" title="실제 호출과 같이 마감이 연장됩니다">호출 발생(테스트)</button>' : '') +
@@ -1169,7 +1172,7 @@ function faultTableRows(){
 function viewGuide(){
   var rows = [
     ['모든 주문', 'GET /admin/orders · GET /order/&lt;id&gt;/qr', 'POST /admin/order/&lt;id&gt;/abort 🔒'],
-    ['조립대 상태', 'GET /admin/stations · GET /admin/calls', 'POST /admin/station/&lt;sid&gt;/call/ok · …/call (테스트) · abort 🔒'],
+    ['조립대 상태', 'GET /admin/stations · GET /admin/calls', 'POST /admin/station/&lt;sid&gt;/call/ok · …/call (테스트) · POST /admin/order/&lt;id&gt;/start 🔒 · abort 🔒'],
     ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill'],
     ['창고 상태', 'GET /admin/faults · GET /admin/stock', 'POST /admin/order/&lt;id&gt;/fault/clear 🔒 · abort 🔒'],
     ['영수증 용지', 'GET /admin/paper', 'POST /admin/paper/refill'],
@@ -1430,6 +1433,19 @@ var ASK = {
         say('조립대 ' + stNo(sid) + ' 호출 해결 · ' + fmtSec(r.waited_sec) + ' 대기');
       }});
   },
+  verifyStation: function(sid){
+    var s = S.stations.filter(function(x){ return x.sid === sid; })[0], o = s && s.order;
+    if(!o || o.stage !== 'arrived'){ say('조립대에 도착한 주문이 없습니다'); return; }
+    var seq = o.order_seq != null ? String(o.order_seq) : '-';
+    ask({title: '조립대 ' + stNo(sid) + ' QR 인증 대신 처리',
+      body: 'QR을 찍은 것과 똑같이 처리됩니다. AGV가 부품을 내려놓고 조립이 시작되니, <b>손님의 대기번호를 확인한 뒤</b> 진행하세요.',
+      kv: [['조립대', stNo(sid)], ['대기번호', seq], ['주문번호', o.order_id]],
+      ok: '인증 처리', tone: 'primary', pw: true,
+      run: async function(v){
+        await api('POST', '/admin/order/' + encodeURIComponent(o.order_id) + '/start', {password: v.password, station_id: sid});
+        say('조립대 ' + stNo(sid) + ' · 대기번호 ' + seq + ' 인증 처리');
+      }});
+  },
   resetStation: function(sid){
     var s = S.stations.filter(function(x){ return x.sid === sid; })[0];
     if(!s || !s.order){ say('배정된 주문이 없습니다'); return; }
@@ -1595,6 +1611,7 @@ document.addEventListener('click', function(ev){
 
   /* 조립대 */
   if(act === 'resolve-help'){ ASK.resolveHelp(sid); return; }
+  if(act === 'verify-station'){ ASK.verifyStation(sid); return; }
   if(act === 'reset-station'){ ASK.resetStation(sid); return; }
   if(act === 'raise-help'){ quick('POST', '/admin/station/' + encodeURIComponent(sid) + '/call', '조립대 ' + stNo(sid) + ' 호출 발생(테스트)'); return; }
 
