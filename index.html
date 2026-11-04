@@ -349,7 +349,7 @@ var API_BASE = (function(){
     var q = new URLSearchParams(location.search).get('api');
     if(q) return q.replace(/\/+$/, '');
   } catch(e) {}
-  return 'https://charry-erminia-revelational.ngrok-free.dev';
+  return 'https://192.168.0.100';
 })();
 var ADMIN_PW = null;   /* 비밀번호가 필요한 동작에서만 묻고 메모리에만 둔다 */
 
