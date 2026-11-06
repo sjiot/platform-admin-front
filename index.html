@@ -179,6 +179,9 @@ tr.open td{background:#f4f8ff}
 .cart .cqty s{text-decoration:none;font-size:10.5px;font-weight:400;color:var(--faint)}
 .cart.low .cqty{color:var(--warn-ink)} .cart.low .meter>i{background:var(--warn)}
 .cart.out{background:var(--danger-soft)} .cart.out .cqty{color:var(--danger-btn-fg)} .cart.out .meter>i{background:var(--danger)}
+.cart.dis{background:var(--danger-soft);box-shadow:inset 0 0 0 2px var(--danger)} .cart.dis .cqty{color:var(--danger-btn-fg)} .cart.dis .meter>i{background:var(--danger)}
+.cart .cbad{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;background:var(--danger);border-radius:4px;padding:1px 5px}
+.pip.dis{box-shadow:0 0 0 2px var(--danger)}
 .rack{display:flex;flex-direction:column;padding:4px 14px 10px}
 .boardrow{display:grid;grid-template-columns:22px 1fr 68px 96px;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line-soft)}
 .rack .boardrow:first-child{border-top:none}
@@ -349,7 +352,7 @@ var API_BASE = (function(){
     var q = new URLSearchParams(location.search).get('api');
     if(q) return q.replace(/\/+$/, '');
   } catch(e) {}
-  return 'https://192.168.0.100';
+  return 'http://192.168.0.100:5000';
 })();
 var ADMIN_PW = null;   /* 비밀번호가 필요한 동작에서만 묻고 메모리에만 둔다 */
 
@@ -378,7 +381,7 @@ async function api(method, path, body){
 
 /* ===================== 상수 ===================== */
 var LOW_AT = 6;                         /* 이 개수 이하면 부족 */
-var KEYCAP_MAX_FALLBACK = 40, BOARD_MAX_FALLBACK = 3;
+var KEYCAP_MAX_FALLBACK = 30, BOARD_MAX_FALLBACK = 20;
 var PAPER_MAX_FALLBACK = 900;           /* config.PAPER_MAX_COUNT — GET /admin/paper 가 max 를 주면 그 값을 쓴다 */
 var PAPER_LOW_RATIO = 0.12;             /* 남은 용지가 최대치의 12% 이하면 부족 (900매 기준 108매) */
 var CNAME = {r:'레드', y:'옐로', g:'그린', b:'블루'};
@@ -468,7 +471,7 @@ function faultDef(code){ return FAULTS[code] || {g:'기타', sec:'-', actor:'플
 /* ===================== 상태 ===================== */
 var S = {
   tab:'orders',
-  orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, board:{}, boardMax:{}, faults:[], line:null,
+  orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, stockStatus:{}, shelfFailed:{}, board:{}, boardMax:{}, boardStatus:{}, faults:[], line:null,
   loaded:{}, err:{},
   paper:{remaining:null, max:null, refilledAt:null, localAt:null},   /* GET /admin/paper · localAt = 이 브라우저에서 채운 시각 */
   log:[], paperLog:[],
@@ -487,6 +490,7 @@ function fmtSec(s){ if(s == null) return '-'; s = Math.max(0, Math.round(s)); re
 function stNo(sid){ return p2(sid); }
 function lowCarts(){ return Object.keys(S.stock).filter(function(k){ return S.stock[k] > 0 && S.stock[k] <= LOW_AT; }); }
 function outCarts(){ return Object.keys(S.stock).filter(function(k){ return S.stock[k] === 0; }); }
+function disCarts(){ return Object.keys(S.stock).filter(function(k){ return S.stockStatus[k] === 'disable'; }); }
 function keyMax(k){ return S.stockMax[k] || KEYCAP_MAX_FALLBACK; }
 function boardMax(c){ return S.boardMax[c] || BOARD_MAX_FALLBACK; }
 function boardTotal(){ return COLORS.reduce(function(a, c){ return a + (S.board[c] || 0); }, 0); }
@@ -628,15 +632,18 @@ async function loadStock(){
     if(e.status === 503){ S.stock = {}; S.board = {}; throw new Error('재고 정보가 아직 없습니다 (부팅 직후 시드 전)'); }
     throw e;
   }
-  var st = {}, mx = {}, bd = {}, bm = {};
+  var st = {}, mx = {}, ss = {}, sf = {}, bd = {}, bm = {}, bs = {};
   Object.keys(d.keycap || {}).forEach(function(l){
     Object.keys(d.keycap[l]).forEach(function(c){
-      st[l + '_' + c] = d.keycap[l][c].qty;
-      mx[l + '_' + c] = d.keycap[l][c].max;
+      var x = d.keycap[l][c];
+      st[l + '_' + c] = x.qty;
+      mx[l + '_' + c] = x.max;
+      ss[l + '_' + c] = x.status || 'unknown';
+      sf[l + '_' + c] = !!x.shelf_failed;
     });
   });
-  Object.keys(d.board || {}).forEach(function(c){ bd[c] = d.board[c].qty; bm[c] = d.board[c].max; });
-  S.stock = st; S.stockMax = mx; S.board = bd; S.boardMax = bm;
+  Object.keys(d.board || {}).forEach(function(c){ bd[c] = d.board[c].qty; bm[c] = d.board[c].max; bs[c] = d.board[c].status || 'unknown'; });
+  S.stock = st; S.stockMax = mx; S.stockStatus = ss; S.shelfFailed = sf; S.board = bd; S.boardMax = bm; S.boardStatus = bs;
 }
 async function loadFaults(){
   var d = await api('GET', '/admin/faults');
@@ -881,14 +888,15 @@ function cartTile(letter, ck){
       '<div class="cid"><span class="sw" style="width:12px;height:12px;background:' + CHEX[ck] + '"></span><span class="cname">' + key + '</span></div>' +
       '<div class="cqty">—<s> / ' + max + '</s></div><div class="meter"><i style="width:0"></i></div></button>';
   }
-  var cls = n === 0 ? 'out' : (n <= LOW_AT ? 'low' : '');
-  return '<button class="cart ' + cls + '" data-act="refill-cart" data-key="' + key + '" type="button">' +
-    '<div class="cid"><span class="sw" style="width:12px;height:12px;background:' + CHEX[ck] + '"></span><span class="cname">' + key + '</span></div>' +
+  var dis = S.stockStatus[key] === 'disable';
+  var cls = dis ? 'dis' : (n === 0 ? 'out' : (n <= LOW_AT ? 'low' : ''));
+  return '<button class="cart ' + cls + '" data-act="' + (dis ? 'revive-cart' : 'refill-cart') + '" data-key="' + key + '" type="button" title="' + (dis ? '고장(disable) · 누르면 해제' : '누르면 교체') + '">' +
+    '<div class="cid"><span class="sw" style="width:12px;height:12px;background:' + CHEX[ck] + '"></span><span class="cname">' + key + '</span>' + (dis ? '<span class="cbad">고장</span>' : '') + '</div>' +
     '<div class="cqty">' + n + '<s> / ' + max + '</s></div>' +
     '<div class="meter"><i style="width:' + Math.min(100, Math.round(n / max * 100)) + '%"></i></div></button>';
 }
 function viewStock(){
-  var out = outCarts(), low = lowCarts();
+  var out = outCarts(), low = lowCarts(), dis = disCarts();
   var missing = COLORS.filter(function(c){ return S.board[c] === 0; });
 
   var zoneCards = ZONES.map(function(z){
@@ -907,10 +915,16 @@ function viewStock(){
       '<span class="sw" style="width:16px;height:16px;background:' + CHEX[c] + '"></span>' +
       '<span style="font-size:12.5px;font-weight:500">보드 · ' + CNAME[c] + ' <span class="mono" style="color:var(--faint);font-size:11px">' + c + '</span></span>' +
       '<span class="num" style="text-align:right;color:' + (n ? 'var(--ink)' : 'var(--danger-btn-fg)') + '">' + (known ? n + ' / ' + max : '—') + '</span>' +
-      '<button class="btn sm" data-act="load-board" data-color="' + c + '" type="button"' + (known && n >= max ? ' disabled' : '') + '>채우기</button></div>';
+      (S.boardStatus[c] === 'disable'
+        ? '<button class="btn sm danger" data-act="revive-board" data-color="' + c + '" type="button">고장 해제</button>'
+        : '<button class="btn sm" data-act="load-board" data-color="' + c + '" type="button"' + (known && n >= max ? ' disabled' : '') + '>채우기</button>') + '</div>';
   }).join('');
 
   return '<div class="wrap narrow">' + errBox(['stock']) +
+    (dis.length
+      ? '<div class="alert"><div class="t"><span>⚠</span>고장(disable) 카트리지 ' + dis.length + '개 · 누르면 해제합니다</div><div class="tags">' +
+        dis.map(function(k){ return '<span class="tag">' + k + ' · ' + S.stock[k] + '개</span>'; }).join('') + '</div></div>'
+      : '') +
     (out.length || low.length
       ? '<div class="alert"><div class="t"><span>⚠</span>키캡 카트리지 · 소진 ' + out.length + ' · 부족 ' + low.length + '</div><div class="tags">' +
         out.map(function(k){ return '<span class="tag">' + k + ' · 소진</span>'; }).join('') +
@@ -924,7 +938,7 @@ function viewStock(){
     '<div class="card rack">' + boardRows + '</div>' +
     '<div class="sechead" style="margin-top:6px"><h2>키캡 카트리지</h2><span class="note">MBTI 글자 8종 × 색상 4종 = 32 · 카트리지당 최대 ' + keyMax('E_r') + '개 · ' + LOW_AT + '개 이하 부족</span></div>' +
     '<div class="toolbar"><button class="btn primary" data-act="refill-low" type="button"' + (out.length + low.length ? '' : ' disabled') + '>부족·소진 카트리지 일괄 교체</button>' +
-      '<span style="font-size:12px;color:var(--muted)">카트리지를 누르면 교체 확인 창이 열립니다. 고장(disable) 칸은 채워도 풀리지 않습니다 — fault 해제로 풉니다.</span></div>' +
+      '<span style="font-size:12px;color:var(--muted)">카트리지를 누르면 교체 확인 창이 열립니다. 고장(disable) 칸은 빨간 테두리로 표시되고, 누르면 고장 해제 확인 창이 열립니다 🔒.</span></div>' +
     '<div class="zonegrid">' + zoneCards + '</div>' +
     '<div class="card" style="padding:14px 15px;display:flex;flex-direction:column;gap:6px">' +
       '<div style="font-size:12.5px;font-weight:600;color:var(--slate)">이 화면에서 한 교체 내역 <span class="muted" style="font-weight:400">(새로고침하면 사라짐)</span></div>' +
@@ -944,8 +958,8 @@ function zoneInner(z){
     var rows = z.letters.map(function(l){
       var pips = COLORS.map(function(c){
         var key = l + '_' + c, n = S.stock[key];
-        var k = n === 0 ? ' out' : (n !== undefined && n <= LOW_AT ? ' low' : '');
-        return '<span class="pip' + k + '" style="background:' + CHEX[c] + (n === undefined ? ';opacity:.25' : '') + '" title="' + key + ' · ' + (n === undefined ? '?' : n) + '/' + keyMax(key) + '"></span>';
+        var k = S.stockStatus[key] === 'disable' ? ' dis' : (n === 0 ? ' out' : (n !== undefined && n <= LOW_AT ? ' low' : ''));
+        return '<span class="pip' + k + '" style="background:' + CHEX[c] + (n === undefined ? ';opacity:.25' : '') + '" title="' + key + ' · ' + (n === undefined ? '?' : n) + '/' + keyMax(key) + (S.stockStatus[key] === 'disable' ? ' · 고장' : '') + '"></span>';
       }).join('');
       return '<div class="piprow"><span class="lt">' + l + '</span>' + pips + '</div>';
     }).join('');
@@ -1173,7 +1187,7 @@ function viewGuide(){
   var rows = [
     ['모든 주문', 'GET /admin/orders · GET /order/&lt;id&gt;/qr', 'POST /admin/order/&lt;id&gt;/abort 🔒'],
     ['조립대 상태', 'GET /admin/stations · GET /admin/calls', 'POST /admin/station/&lt;sid&gt;/call/ok · …/call (테스트) · POST /admin/order/&lt;id&gt;/start 🔒 · abort 🔒'],
-    ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill'],
+    ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill · POST /admin/stock/revive 🔒 (고장 칸 해제)'],
     ['창고 상태', 'GET /admin/faults · GET /admin/stock', 'POST /admin/order/&lt;id&gt;/fault/clear 🔒 · abort 🔒'],
     ['영수증 용지', 'GET /admin/paper', 'POST /admin/paper/refill'],
     ['운영', 'GET /admin/line · GET /admin/debug/snapshot', 'POST /admin/line 🔒 · POST /admin/reset 🔒'],
@@ -1199,9 +1213,10 @@ function viewGuide(){
   '<ul>' +
     '<li><b>대기번호</b>는 <code>order_seq</code> 그대로입니다.</li>' +
     '<li><b>사용자상태</b>는 백엔드에 없는 값이라 단계에서 계산합니다 — 접수~출고 대기 = 대기중, AGV 적재·조립대 도착 = 호출중, 인증·수령 = 조립중, 완료 = 조립완료, 미수령 = 미수령, 사유가 있는 종료(관리자 중단·타임아웃 등) = 종료.</li>' +
-    '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 40 · 보드 3 (서버 <code>config</code> 값).</li>' +
+    '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 30 · 보드 20 (서버 <code>config</code> 값).</li>' +
     '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
+    '<li><b>고장(disable) 칸</b>은 창고 재고 탭에서 빨간 테두리로 보입니다. 누르면 idle 로 되돌리고(수량 유지) 그 칸을 기다리던 주문을 다시 배정합니다 🔒. 창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.</li>' +
     '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
   '</ul>' +
 
@@ -1413,12 +1428,17 @@ function abortDialog(o){   /* o: {id, seq, stage, sid} */
 }
 
 /* 방금 채운 칸 때문에 멈춘 주문 → fault 해제 확인 창으로 이어간다 */
-function followUpFault(slots){
+function followUpFault(slots, codes, lead){
+  codes = codes || ['keycap_empty', 'board_empty'];
   var f = S.faults.filter(function(x){
-    return (x.code === 'keycap_empty' || x.code === 'board_empty') && slots.indexOf(x.target) >= 0;
+    return codes.indexOf(x.code) >= 0 && slots.indexOf(x.target) >= 0;
   })[0];
-  return f ? faultDialog(f, '<b>방금 채운 칸(' + esc(f.target) + ') 때문에 멈춘 주문이 있습니다.</b> 재고를 채워도 fault는 남아 있어서 해제해야 이어집니다.') : null;
+  if(!f) return null;
+  return faultDialog(f, lead
+    ? lead.replace('{칸}', esc(f.target))
+    : '<b>방금 채운 칸(' + esc(f.target) + ') 때문에 멈춘 주문이 있습니다.</b> 재고를 채워도 fault는 남아 있어서 해제해야 이어집니다.');
 }
+var REVIVE_LEAD = '<b>방금 해제한 칸({칸}) 때문에 멈춘 주문이 있습니다.</b> 칸 상태를 되돌려도 주문의 fault는 남아 있어서 해제해야 이어집니다.';
 
 var ASK = {
   resolveHelp: function(sid){
@@ -1494,6 +1514,38 @@ var ASK = {
         addLog(key + ' 카트리지 교체 · ' + n + ' → ' + r.count + '개' + (r.status === 'disable' ? ' (고장 상태 유지)' : ''));
         say(key + ' 교체 완료');
         return followUpFault([key]);
+      }});
+  },
+  reviveCart: function(key){
+    var n = S.stock[key], max = keyMax(key);
+    if(S.stockStatus[key] !== 'disable'){ say(key + ' 는 고장(disable) 상태가 아닙니다'); return; }
+    ask({title: '카트리지 고장 해제 · ' + key,
+      body: '창고가 이 칸을 <b>disable</b>(고장)로 보고했습니다. 재장착·점검을 마쳤나요? 해제하면 <b>idle</b>로 되돌리고 이 칸을 기다리던 주문을 다시 배정합니다. 수량(' + n + '개)은 그대로 둡니다.' +
+        (S.shelfFailed[key] ? '<br><br>이 선반은 <b>드라이버 고장</b> 표시도 있어서 같이 풉니다 (선반 8칸).' : '') +
+        '<br><br>창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.',
+      kv: [['카트리지', key], ['현재', n + ' / ' + max + ' · disable'], ['해제 후', n + ' / ' + max + ' · idle']],
+      ok: '고장 해제', tone: 'danger', pw: true,
+      run: async function(v){
+        var r = await api('POST', '/admin/stock/revive', {part:key, password:v.password});
+        S.stockStatus[key] = r.status;
+        addLog(key + ' 고장 해제 · disable → idle' + (r.shelf_cleared ? ' (선반 ' + r.shelf + ' 드라이버 고장 표시 해제)' : '') + (r.assigned ? ' · 주문 ' + r.assigned + ' 배정' : ''));
+        say(key + ' 고장 해제');
+        return followUpFault([key], ['keycap_cartridge_failed', 'keycap_driver_failed', 'keycap_empty'], REVIVE_LEAD);
+      }});
+  },
+  reviveBoard: function(c){
+    var n = S.board[c], max = boardMax(c);
+    if(S.boardStatus[c] !== 'disable'){ say('보드 ' + CNAME[c] + ' 는 고장(disable) 상태가 아닙니다'); return; }
+    ask({title: '보드 보관대 고장 해제 · ' + CNAME[c],
+      body: '창고가 이 칸을 <b>disable</b>로 보고했습니다. 점검을 마쳤나요? 해제하면 <b>idle</b>로 되돌리고 이 칸을 기다리던 주문을 다시 배정합니다. 수량(' + n + '장)은 그대로 둡니다.',
+      kv: [['칸', c], ['현재', n + ' / ' + max + ' · disable'], ['해제 후', n + ' / ' + max + ' · idle']],
+      ok: '고장 해제', tone: 'danger', pw: true,
+      run: async function(v){
+        var r = await api('POST', '/admin/stock/revive', {part:c, password:v.password});
+        S.boardStatus[c] = r.status;
+        addLog('보드 ' + CNAME[c] + ' 고장 해제 · disable → idle' + (r.assigned ? ' · 주문 ' + r.assigned + ' 배정' : ''));
+        say('보드 ' + CNAME[c] + ' 고장 해제');
+        return followUpFault([c], ['board_empty'], REVIVE_LEAD);
       }});
   },
   loadBoard: function(c){
@@ -1635,6 +1687,8 @@ document.addEventListener('click', function(ev){
 
   /* 재고 */
   if(act === 'refill-cart'){ ASK.refillCart(t.getAttribute('data-key')); return; }
+  if(act === 'revive-cart'){ ASK.reviveCart(t.getAttribute('data-key')); return; }
+  if(act === 'revive-board'){ ASK.reviveBoard(t.getAttribute('data-color')); return; }
   if(act === 'load-board'){ ASK.loadBoard(t.getAttribute('data-color')); return; }
   if(act === 'refill-low'){ ASK.refillLow(); return; }
 
