@@ -682,8 +682,8 @@ async function loadFaults(){
   mergeFaults();
 }
 /* 종료된 주문에 남은 fault 도 활성 fault 로 센다. GET /admin/faults 는 진행 중 주문만 주므로 주문 목록(오늘 아카이브)에서 덧붙인다.
-   서버에서는 이미 끝난 주문이라 해제·중단할 수 없다 — 오늘 종료 목록에 있는 동안 남는다.
-   아카이브 응답에 fault_section 이 없으면 위치는 플랫폼 감지로 모인다 */
+   해제는 진행 중 주문과 같은 POST /admin/order/<id>/fault/clear — 서버가 아카이브 기록에서만 지운다 (중단은 없다).
+   서버가 구버전이라 아카이브 응답에 fault_section 이 없으면 위치는 플랫폼 감지로 모이고, 해제는 404·409 로 거절된다 */
 function mergeFaults(){
   var seen = {};
   S.liveFaults.forEach(function(f){ seen[f.id] = true; });
@@ -1076,7 +1076,7 @@ function viewWarehouse(){
         : stageCell(f.stage) + (f.ended ? '<div class="mono" style="font-size:10.5px;color:var(--faint)">' + esc(fmtWhen(f.at)) + (f.reason ? ' · ' + esc(f.reason) : '') + '</div>' : '')) + '</td>' +
       '<td style="color:var(--slate)">' + esc(def.fix) + '</td>' +
       '<td><span class="actor ' + actorClass(def.actor) + '">' + esc(def.actor) + '</span></td>' +
-      '<td style="text-align:right;white-space:nowrap">' + (f.ended ? '<span class="muted" style="font-size:11.5px" title="이미 끝난 주문이라 서버에서 해제할 수 없습니다">종료됨 · 해제 불가</span></td></tr>' : '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>' +
+      '<td style="text-align:right;white-space:nowrap">' + (f.ended ? '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button" title="종료된 주문 — 기록에서만 지웁니다">해제</button></td></tr>' : '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>' +
         (f.orderless ? '' : ' <button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="그 자리에서 이어갈 수 없을 때">중단</button>') + '</td></tr>');
   }).join('');
 
@@ -1262,7 +1262,7 @@ function viewGuide(){
     '<li><b>사용자상태</b>는 백엔드에 없는 값이라 단계에서 계산합니다 — 접수~출고 대기 = 대기중, AGV 적재·조립대 도착 = 호출중, 인증·수령 = 조립중, 완료 = 조립완료, 미수령 = 미수령, 사유가 있는 종료(관리자 중단·타임아웃 등) = 종료.</li>' +
     '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 30 · 보드 20 (서버 <code>config</code> 값).</li>' +
     '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
-    '<li><b>완료·종료된 주문의 fault</b>도 창고 상태 탭에 활성 fault로 남습니다. 종료된 주문은 서버에서 해제할 수 없어 오늘 종료 목록에 있는 동안 계속 보이고, 위치는 서버가 <code>fault_section</code>을 주지 않으면 플랫폼 감지로 모입니다.</li>' +
+    '<li><b>완료·종료된 주문의 fault</b>도 창고 상태 탭에 활성 fault로 남습니다. 종료된 주문은 해제하면 종료 기록에서 fault만 지워지고(다시 진행되는 것 없음), 해제하지 않으면 오늘 종료 목록에 있는 동안 계속 보입니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
     '<li><b>고장(disable) 칸</b>은 창고 재고 탭에서 빨간 테두리로 보입니다. 누르면 idle 로 되돌리고(수량 유지) 그 칸을 기다리던 주문을 다시 배정합니다 🔒. 창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.</li>' +
     '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
@@ -1485,6 +1485,17 @@ function whFaultDialog(f){
 function faultDialog(f, lead){
   if(f.orderless) return f.kind === 'agv' ? agvFaultDialog(f) : whFaultDialog(f);
   var def = faultDef(f.code), pid = partOf(f);
+  /* 종료된 주문 — 이어갈 단계가 없다. 서버가 오늘 아카이브 기록에서만 fault 를 지운다 (응답 archived=true) */
+  if(f.ended) return {
+    title: 'fault 해제 · 대기번호 ' + f.wait + ' (종료)',
+    body: '이미 종료된 주문입니다. 해제하면 <b>종료 기록에서 fault만 지웁니다</b> — 다시 진행되는 것은 없고, 칸 고장·AGV 고장이 남아 있다면 그쪽은 따로 해제해야 합니다.',
+    kv: [['fault', f.code], ['위치', PARTS[pid].name + (f.target ? ' · ' + f.target : '')], ['대기번호', f.wait], ['멈춘 단계', stageLabel(f.stage)], ['종료', (f.at ? fmtWhen(f.at) : '-') + (f.reason ? ' · ' + f.reason : '')]],
+    ok: 'fault 해제', tone: 'danger', pw: true,
+    run: async function(v){
+      var r = await api('POST', '/admin/order/' + encodeURIComponent(f.id) + '/fault/clear', {password: v.password});
+      say(r.cleared + ' 해제 · 종료 기록에서 지움');
+    }
+  };
   var warn = (f.stage === 'assigned' || f.stage === 'keycap_mismatched')
     ? '<br><br>해제하면 출고 지시 마감(60초)이 다시 걸립니다. 창고가 그 안에 재배출을 시작하지 않으면 <b>stage_timeout</b>이 다시 붙습니다.' : '';
   return {
