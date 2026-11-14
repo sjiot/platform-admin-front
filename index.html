@@ -471,7 +471,7 @@ function faultDef(code){ return FAULTS[code] || {g:'기타', sec:'-', actor:'플
 /* ===================== 상태 ===================== */
 var S = {
   tab:'orders',
-  orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, stockStatus:{}, shelfFailed:{}, board:{}, boardMax:{}, boardStatus:{}, faults:[], line:null,
+  orders:[], stations:[], calls:{}, stock:{}, stockMax:{}, stockStatus:{}, shelfFailed:{}, board:{}, boardMax:{}, boardStatus:{}, faults:[], liveFaults:[], line:null,
   loaded:{}, err:{},
   paper:{remaining:null, max:null, refilledAt:null, localAt:null},   /* GET /admin/paper · localAt = 이 브라우저에서 채운 시각 */
   log:[], paperLog:[],
@@ -599,6 +599,7 @@ async function loadOrders(){
       stage: o.stage,
       status: userStatus(o),
       fault: o.fault || null,
+      faultSection: o.fault_section || '',
       ended: !!o.ended_at,
       endedAt: o.ended_at || null,
       reason: o.reason || null,
@@ -612,6 +613,7 @@ async function loadOrders(){
   S.orders = list;
   var ids = list.map(function(o){ return o.orderNo; });
   S.sel = S.sel.filter(function(id){ return ids.indexOf(id) >= 0; });
+  mergeFaults();
 }
 async function loadStations(){
   var d = await api('GET', '/admin/stations');
@@ -647,7 +649,7 @@ async function loadStock(){
 }
 async function loadFaults(){
   var d = await api('GET', '/admin/faults');
-  S.faults = (d.faults || []).map(function(x){
+  var live = (d.faults || []).map(function(x){
     var p = (x.fault_section || '').split(':');
     return {
       id: x.order_id,
@@ -674,8 +676,29 @@ async function loadFaults(){
       at: x.at || null
     };
   }
-  (d.agv_fault || []).forEach(function(x){ S.faults.push(orderless('agv', x)); });
-  (d.warehouse_fault || []).forEach(function(x){ S.faults.push(orderless('warehouse', x)); });
+  (d.agv_fault || []).forEach(function(x){ live.push(orderless('agv', x)); });
+  (d.warehouse_fault || []).forEach(function(x){ live.push(orderless('warehouse', x)); });
+  S.liveFaults = live;
+  mergeFaults();
+}
+/* 종료된 주문에 남은 fault 도 활성 fault 로 센다. GET /admin/faults 는 진행 중 주문만 주므로 주문 목록(오늘 아카이브)에서 덧붙인다.
+   서버에서는 이미 끝난 주문이라 해제·중단할 수 없다 — 오늘 종료 목록에 있는 동안 남는다.
+   아카이브 응답에 fault_section 이 없으면 위치는 플랫폼 감지로 모인다 */
+function mergeFaults(){
+  var seen = {};
+  S.liveFaults.forEach(function(f){ seen[f.id] = true; });
+  var ended = S.orders.filter(function(o){ return o.ended && o.fault && !seen[o.orderNo]; }).map(function(o){
+    var p = o.faultSection.split(':');
+    return {
+      id: o.orderNo, ended: true,
+      code: o.fault,
+      section: o.faultSection,
+      target: o.fault === 'stage_timeout' ? o.faultSection : (p[2] || p[1] || ''),
+      seq: o.seq, wait: o.waitNo, stage: o.stage, sid: o.sid,
+      reason: o.reason, at: o.endedAt
+    };
+  });
+  S.faults = S.liveFaults.concat(ended);
 }
 function orderlessOf(kind){ return S.faults.filter(function(f){ return f.orderless && f.kind === kind; }); }
 async function loadLine(){ S.line = await api('GET', '/admin/line'); }
@@ -688,7 +711,7 @@ async function loadPaper(){
 }
 
 var SOURCES = {orders:loadOrders, stations:loadStations, calls:loadCalls, stock:loadStock, faults:loadFaults, line:loadLine, paper:loadPaper};
-var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','stock'], paper:['paper'], ops:['line'], guide:[]};
+var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','orders','stock'], paper:['paper'], ops:['line'], guide:[]};
 var HEADER_SOURCES = ['calls','line','stock','paper'];
 var refreshing = false;
 
@@ -1043,24 +1066,24 @@ function viewWarehouse(){
   var rows = faults.map(function(f){
     var def = faultDef(f.code), pid = partOf(f);
     return '<tr class="rowlink" data-fault-part="' + pid + '" data-act="locate-row">' +
-      '<td class="num" style="font-weight:600;color:var(--navy)">' + (f.orderless ? '<span class="badge n">주문 없음</span>' : esc(f.wait)) + '</td>' +
+      '<td class="num" style="font-weight:600;color:var(--navy)">' + (f.orderless ? '<span class="badge n">주문 없음</span>' : esc(f.wait) + (f.ended ? ' <span class="badge n">종료</span>' : '')) + '</td>' +
       '<td><span class="badge">' + esc(def.label) + '</span></td>' +
       '<td class="mono" style="font-size:11.5px">' + esc(f.code) + '</td>' +
       '<td style="font-weight:600">' + esc(PARTS[pid].name) + (f.target ? ' <span class="mono" style="font-weight:400;color:var(--muted)">' + esc(f.target) + '</span>' : '') + '</td>' +
       '<td>' + (f.orderless
         ? '<span class="stagecell"><span class="stagename abn">' + (f.kind === 'agv' ? '배정·접수 중단' : '새 주문 접수 중단') + '</span></span>' +
           (f.at ? '<div class="mono" style="font-size:10.5px;color:var(--faint)">' + esc(fmtWhen(f.at)) + '</div>' : '')
-        : stageCell(f.stage)) + '</td>' +
+        : stageCell(f.stage) + (f.ended ? '<div class="mono" style="font-size:10.5px;color:var(--faint)">' + esc(fmtWhen(f.at)) + (f.reason ? ' · ' + esc(f.reason) : '') + '</div>' : '')) + '</td>' +
       '<td style="color:var(--slate)">' + esc(def.fix) + '</td>' +
       '<td><span class="actor ' + actorClass(def.actor) + '">' + esc(def.actor) + '</span></td>' +
-      '<td style="text-align:right;white-space:nowrap"><button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>' +
-        (f.orderless ? '' : ' <button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="그 자리에서 이어갈 수 없을 때">중단</button>') + '</td></tr>';
+      '<td style="text-align:right;white-space:nowrap">' + (f.ended ? '<span class="muted" style="font-size:11.5px" title="이미 끝난 주문이라 서버에서 해제할 수 없습니다">종료됨 · 해제 불가</span></td></tr>' : '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>' +
+        (f.orderless ? '' : ' <button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="그 자리에서 이어갈 수 없을 때">중단</button>') + '</td></tr>');
   }).join('');
 
-  return '<div class="wrap">' + errBox(['faults','stock']) +
+  return '<div class="wrap">' + errBox(['faults','orders','stock']) +
     (S.faults.length
       ? '<div class="alert"><div class="t"><span class="dot"></span>fault ' + S.faults.length + '건 · 조치 필요</div><div class="tags">' +
-        faults.map(function(f){ return '<span class="tag">' + esc(PARTS[partOf(f)].name) + ' · ' + esc(faultDef(f.code).label) + (f.orderless ? ' · 주문 없음' : '') + '</span>'; }).join('') + '</div></div>'
+        faults.map(function(f){ return '<span class="tag">' + esc(PARTS[partOf(f)].name) + ' · ' + esc(faultDef(f.code).label) + (f.orderless ? ' · 주문 없음' : (f.ended ? ' · 종료' : '')) + '</span>'; }).join('') + '</div></div>'
       : (S.loaded.faults && !S.err.faults ? '<div class="alert good"><div class="t">활성 fault 없음 · 라인 정상</div></div>' : '')) +
     '<div class="sechead"><h2>창고 도면</h2><span class="note">파트를 누르면 해당 fault 행이, fault 행을 누르면 해당 파트가 반짝입니다.</span></div>' +
     '<div class="card mapbox"><div class="map">' + map + '</div></div>' +
@@ -1069,7 +1092,7 @@ function viewWarehouse(){
       '<span><i style="background:' + CHEX.y + ';outline:2px solid var(--warn);outline-offset:1px;margin-left:2px"></i>카트리지 부족(≤' + LOW_AT + ')</span>' +
       '<span><i style="background:' + CHEX.b + ';outline:2px solid var(--danger);outline-offset:1px;margin-left:2px"></i>카트리지 소진(0)</span>' +
     '</div>' +
-    '<div class="sechead" style="margin-top:6px"><h2>fault</h2><span class="note">주문당 1건. 주문 없는 AGV·창고 고장은 대기번호 칸에 「주문 없음」으로 나오고, 걸려 있는 동안 새 주문 접수가 막힙니다.</span></div>' +
+    '<div class="sechead" style="margin-top:6px"><h2>fault</h2><span class="note">주문당 1건. 주문 없는 AGV·창고 고장은 대기번호 칸에 「주문 없음」으로 나오고, 걸려 있는 동안 새 주문 접수가 막힙니다. 완료·종료된 주문의 fault도 그대로 남습니다.</span></div>' +
     '<div class="card tablebox">' + (faults.length
       ? '<table><thead><tr><th>대기번호</th><th>구분</th><th>fault</th><th>위치</th><th>멈춘 단계</th><th>조치 내용</th><th>수행 주체</th><th style="text-align:right">조치</th></tr></thead><tbody>' + rows + '</tbody></table>'
       : '<div class="empty">' + (S.loaded.faults ? 'fault가 없습니다.' : '불러오는 중…') + '</div>') + '</div>' +
@@ -1239,6 +1262,7 @@ function viewGuide(){
     '<li><b>사용자상태</b>는 백엔드에 없는 값이라 단계에서 계산합니다 — 접수~출고 대기 = 대기중, AGV 적재·조립대 도착 = 호출중, 인증·수령 = 조립중, 완료 = 조립완료, 미수령 = 미수령, 사유가 있는 종료(관리자 중단·타임아웃 등) = 종료.</li>' +
     '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 30 · 보드 20 (서버 <code>config</code> 값).</li>' +
     '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
+    '<li><b>완료·종료된 주문의 fault</b>도 창고 상태 탭에 활성 fault로 남습니다. 종료된 주문은 서버에서 해제할 수 없어 오늘 종료 목록에 있는 동안 계속 보이고, 위치는 서버가 <code>fault_section</code>을 주지 않으면 플랫폼 감지로 모입니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
     '<li><b>고장(disable) 칸</b>은 창고 재고 탭에서 빨간 테두리로 보입니다. 누르면 idle 로 되돌리고(수량 유지) 그 칸을 기다리던 주문을 다시 배정합니다 🔒. 창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.</li>' +
     '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
@@ -1507,7 +1531,7 @@ function abortDialog(o){   /* o: {id, seq, stage, sid} */
 function followUpFault(slots, codes, lead){
   codes = codes || ['keycap_empty', 'board_empty'];
   var f = S.faults.filter(function(x){
-    return !x.orderless && codes.indexOf(x.code) >= 0 && slots.indexOf(x.target) >= 0;
+    return !x.orderless && !x.ended && codes.indexOf(x.code) >= 0 && slots.indexOf(x.target) >= 0;
   })[0];
   if(!f) return null;
   return faultDialog(f, lead
