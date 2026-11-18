@@ -463,7 +463,7 @@ var FAULTS = {
   agv_broken:             {g:'AGV',      sec:'agv',                actor:'agv',      label:'AGV 자체 고장',    fix:'사람 개입 필요 · 수동 견인 후 부팅'},
   keycap_empty:           {g:'재고',     sec:'keycap_cartridge:{선반}:{칸}', actor:'창고', label:'키캡 재고 소진', fix:'카트리지 교체(재고 채우기) 후 fault 해제'},
   board_empty:            {g:'재고',     sec:'board_cartridge:{칸}', actor:'창고',     label:'보드 재고 소진',   fix:'보드 보충(재고 채우기) 후 fault 해제'},
-  stage_timeout:          {g:'플랫폼',   sec:'그 단계 설비',        actor:'플랫폼',   label:'단계 체류 초과',   fix:'끊긴 동작 재수행 후 fault 해제'},
+  stage_timeout:          {g:'플랫폼',   sec:'그 단계 설비',        actor:'플랫폼',   label:'단계 체류 초과',   fix:'해제 없음 — 이 주문 중단'},
   restart_unknown:        {g:'플랫폼',   sec:'keycap_cartridge',   actor:'플랫폼',   label:'재기동 진행 불명', fix:'창고 진행분 확인 후 fault 해제'}
 };
 function faultDef(code){ return FAULTS[code] || {g:'기타', sec:'-', actor:'플랫폼', label:code || '알 수 없음', fix:'로그 확인'}; }
@@ -681,24 +681,11 @@ async function loadFaults(){
   S.liveFaults = live;
   mergeFaults();
 }
-/* 종료된 주문에 남은 fault 도 활성 fault 로 센다. GET /admin/faults 는 진행 중 주문만 주므로 주문 목록(오늘 아카이브)에서 덧붙인다.
-   해제는 진행 중 주문과 같은 POST /admin/order/<id>/fault/clear — 서버가 아카이브 기록에서만 지운다 (중단은 없다).
-   서버가 구버전이라 아카이브 응답에 fault_section 이 없으면 위치는 플랫폼 감지로 모이고, 해제는 404·409 로 거절된다 */
+/* fault 목록은 GET /admin/faults (진행 중 주문 + 주문 없는 고장) 그대로다.
+   종료·중단된 주문의 fault 는 기록일 뿐 해제할 대상이 아니라서 여기 올리지 않는다 — 주문 탭 상세에서 본다.
+   서버도 완료된 주문의 해제를 409 로 거절한다. */
 function mergeFaults(){
-  var seen = {};
-  S.liveFaults.forEach(function(f){ seen[f.id] = true; });
-  var ended = S.orders.filter(function(o){ return o.ended && o.fault && !seen[o.orderNo]; }).map(function(o){
-    var p = o.faultSection.split(':');
-    return {
-      id: o.orderNo, ended: true,
-      code: o.fault,
-      section: o.faultSection,
-      target: o.fault === 'stage_timeout' ? o.faultSection : (p[2] || p[1] || ''),
-      seq: o.seq, wait: o.waitNo, stage: o.stage, sid: o.sid,
-      reason: o.reason, at: o.endedAt
-    };
-  });
-  S.faults = S.liveFaults.concat(ended);
+  S.faults = S.liveFaults.slice();
 }
 function orderlessOf(kind){ return S.faults.filter(function(f){ return f.orderless && f.kind === kind; }); }
 async function loadLine(){ S.line = await api('GET', '/admin/line'); }
@@ -1066,24 +1053,26 @@ function viewWarehouse(){
   var rows = faults.map(function(f){
     var def = faultDef(f.code), pid = partOf(f);
     return '<tr class="rowlink" data-fault-part="' + pid + '" data-act="locate-row">' +
-      '<td class="num" style="font-weight:600;color:var(--navy)">' + (f.orderless ? '<span class="badge n">주문 없음</span>' : esc(f.wait) + (f.ended ? ' <span class="badge n">종료</span>' : '')) + '</td>' +
+      '<td class="num" style="font-weight:600;color:var(--navy)">' + (f.orderless ? '<span class="badge n">주문 없음</span>' : esc(f.wait)) + '</td>' +
       '<td><span class="badge">' + esc(def.label) + '</span></td>' +
       '<td class="mono" style="font-size:11.5px">' + esc(f.code) + '</td>' +
       '<td style="font-weight:600">' + esc(PARTS[pid].name) + (f.target ? ' <span class="mono" style="font-weight:400;color:var(--muted)">' + esc(f.target) + '</span>' : '') + '</td>' +
       '<td>' + (f.orderless
         ? '<span class="stagecell"><span class="stagename abn">' + (f.kind === 'agv' ? '배정·접수 중단' : '새 주문 접수 중단') + '</span></span>' +
           (f.at ? '<div class="mono" style="font-size:10.5px;color:var(--faint)">' + esc(fmtWhen(f.at)) + '</div>' : '')
-        : stageCell(f.stage) + (f.ended ? '<div class="mono" style="font-size:10.5px;color:var(--faint)">' + esc(fmtWhen(f.at)) + (f.reason ? ' · ' + esc(f.reason) : '') + '</div>' : '')) + '</td>' +
+        : stageCell(f.stage)) + '</td>' +
       '<td style="color:var(--slate)">' + esc(def.fix) + '</td>' +
       '<td><span class="actor ' + actorClass(def.actor) + '">' + esc(def.actor) + '</span></td>' +
-      '<td style="text-align:right;white-space:nowrap">' + (f.ended ? '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button" title="종료된 주문 — 기록에서만 지웁니다">해제</button></td></tr>' : '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>' +
-        (f.orderless ? '' : ' <button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="그 자리에서 이어갈 수 없을 때">중단</button>') + '</td></tr>');
+      '<td style="text-align:right;white-space:nowrap">' +
+        /* stage_timeout 은 해제하지 않는다 (서버 409) — 중단만 */
+        (f.code === 'stage_timeout' ? '' : '<button class="btn sm ghostdanger" data-act="resolve-fault" data-fault="' + esc(f.id) + '" type="button">해제</button>') +
+        (f.orderless ? '' : ' <button class="btn sm" data-act="abort-fault" data-fault="' + esc(f.id) + '" type="button" title="' + (f.code === 'stage_timeout' ? '단계 체류 초과 — 해제 없이 중단' : '그 자리에서 이어갈 수 없을 때') + '">중단</button>') + '</td></tr>';
   }).join('');
 
   return '<div class="wrap">' + errBox(['faults','orders','stock']) +
     (S.faults.length
       ? '<div class="alert"><div class="t"><span class="dot"></span>fault ' + S.faults.length + '건 · 조치 필요</div><div class="tags">' +
-        faults.map(function(f){ return '<span class="tag">' + esc(PARTS[partOf(f)].name) + ' · ' + esc(faultDef(f.code).label) + (f.orderless ? ' · 주문 없음' : (f.ended ? ' · 종료' : '')) + '</span>'; }).join('') + '</div></div>'
+        faults.map(function(f){ return '<span class="tag">' + esc(PARTS[partOf(f)].name) + ' · ' + esc(faultDef(f.code).label) + (f.orderless ? ' · 주문 없음' : '') + '</span>'; }).join('') + '</div></div>'
       : (S.loaded.faults && !S.err.faults ? '<div class="alert good"><div class="t">활성 fault 없음 · 라인 정상</div></div>' : '')) +
     '<div class="sechead"><h2>창고 도면</h2><span class="note">파트를 누르면 해당 fault 행이, fault 행을 누르면 해당 파트가 반짝입니다.</span></div>' +
     '<div class="card mapbox"><div class="map">' + map + '</div></div>' +
@@ -1092,7 +1081,7 @@ function viewWarehouse(){
       '<span><i style="background:' + CHEX.y + ';outline:2px solid var(--warn);outline-offset:1px;margin-left:2px"></i>카트리지 부족(≤' + LOW_AT + ')</span>' +
       '<span><i style="background:' + CHEX.b + ';outline:2px solid var(--danger);outline-offset:1px;margin-left:2px"></i>카트리지 소진(0)</span>' +
     '</div>' +
-    '<div class="sechead" style="margin-top:6px"><h2>fault</h2><span class="note">주문당 1건. 주문 없는 AGV·창고 고장은 대기번호 칸에 「주문 없음」으로 나오고, 걸려 있는 동안 새 주문 접수가 막힙니다. 완료·종료된 주문의 fault도 그대로 남습니다.</span></div>' +
+    '<div class="sechead" style="margin-top:6px"><h2>fault</h2><span class="note">주문당 1건. 주문 없는 AGV·창고 고장은 대기번호 칸에 「주문 없음」으로 나오고, 걸려 있는 동안 새 주문 접수가 막힙니다. 종료·중단된 주문의 fault는 여기 나오지 않습니다(주문 탭 상세에서 확인). 단계 체류 초과(stage_timeout)는 해제 없이 중단합니다.</span></div>' +
     '<div class="card tablebox">' + (faults.length
       ? '<table><thead><tr><th>대기번호</th><th>구분</th><th>fault</th><th>위치</th><th>멈춘 단계</th><th>조치 내용</th><th>수행 주체</th><th style="text-align:right">조치</th></tr></thead><tbody>' + rows + '</tbody></table>'
       : '<div class="empty">' + (S.loaded.faults ? 'fault가 없습니다.' : '불러오는 중…') + '</div>') + '</div>' +
@@ -1262,7 +1251,8 @@ function viewGuide(){
     '<li><b>사용자상태</b>는 백엔드에 없는 값이라 단계에서 계산합니다 — 접수~출고 대기 = 대기중, AGV 적재·조립대 도착 = 호출중, 인증·수령 = 조립중, 완료 = 조립완료, 미수령 = 미수령, 사유가 있는 종료(관리자 중단·타임아웃 등) = 종료.</li>' +
     '<li><b>재고 최대치</b>는 카트리지 1칸 한도입니다 — 키캡 30 · 보드 20 (서버 <code>config</code> 값).</li>' +
     '<li><b>fault는 주문당 1건</b>이고 해제·중단 모두 주문번호로 합니다. 해제하면 단계는 그대로 두고 그 자리에서 이어갑니다. 수행 주체는 표시용입니다 — 요청은 항상 같은 API 하나로 나갑니다.</li>' +
-    '<li><b>완료·종료된 주문의 fault</b>도 창고 상태 탭에 활성 fault로 남습니다. 종료된 주문은 해제하면 종료 기록에서 fault만 지워지고(다시 진행되는 것 없음), 해제하지 않으면 오늘 종료 목록에 있는 동안 계속 보입니다.</li>' +
+    '<li><b>종료·중단된 주문의 fault</b>는 창고 상태 탭에 나오지 않습니다. 기록이라 해제할 것이 없고, 주문 탭 상세에서 볼 수 있습니다.</li>' +
+    '<li><b>단계 체류 초과(stage_timeout)</b>는 해제하지 않습니다. 그 주문을 <b>중단</b>하세요 — 해제해도 같은 자리에서 시계만 다시 돌아 또 걸립니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
     '<li><b>고장(disable) 칸</b>은 창고 재고 탭에서 빨간 테두리로 보입니다. 누르면 idle 로 되돌리고(수량 유지) 그 칸을 기다리던 주문을 다시 배정합니다 🔒. 창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.</li>' +
     '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
@@ -1485,17 +1475,6 @@ function whFaultDialog(f){
 function faultDialog(f, lead){
   if(f.orderless) return f.kind === 'agv' ? agvFaultDialog(f) : whFaultDialog(f);
   var def = faultDef(f.code), pid = partOf(f);
-  /* 종료된 주문 — 이어갈 단계가 없다. 서버가 오늘 아카이브 기록에서만 fault 를 지운다 (응답 archived=true) */
-  if(f.ended) return {
-    title: 'fault 해제 · 대기번호 ' + f.wait + ' (종료)',
-    body: '이미 종료된 주문입니다. 해제하면 <b>종료 기록에서 fault만 지웁니다</b> — 다시 진행되는 것은 없고, 칸 고장·AGV 고장이 남아 있다면 그쪽은 따로 해제해야 합니다.',
-    kv: [['fault', f.code], ['위치', PARTS[pid].name + (f.target ? ' · ' + f.target : '')], ['대기번호', f.wait], ['멈춘 단계', stageLabel(f.stage)], ['종료', (f.at ? fmtWhen(f.at) : '-') + (f.reason ? ' · ' + f.reason : '')]],
-    ok: 'fault 해제', tone: 'danger', pw: true,
-    run: async function(v){
-      var r = await api('POST', '/admin/order/' + encodeURIComponent(f.id) + '/fault/clear', {password: v.password});
-      say(r.cleared + ' 해제 · 종료 기록에서 지움');
-    }
-  };
   var warn = (f.stage === 'assigned' || f.stage === 'keycap_mismatched')
     ? '<br><br>해제하면 출고 지시 마감(60초)이 다시 걸립니다. 창고가 그 안에 재배출을 시작하지 않으면 <b>stage_timeout</b>이 다시 붙습니다.' : '';
   return {
@@ -1542,7 +1521,7 @@ function abortDialog(o){   /* o: {id, seq, stage, sid} */
 function followUpFault(slots, codes, lead){
   codes = codes || ['keycap_empty', 'board_empty'];
   var f = S.faults.filter(function(x){
-    return !x.orderless && !x.ended && codes.indexOf(x.code) >= 0 && slots.indexOf(x.target) >= 0;
+    return !x.orderless && codes.indexOf(x.code) >= 0 && slots.indexOf(x.target) >= 0;
   })[0];
   if(!f) return null;
   return faultDialog(f, lead
@@ -1619,7 +1598,9 @@ var ASK = {
   },
   resolveFault: function(id){
     var f = S.faults.filter(function(x){ return x.id === id; })[0];
-    if(f) ask(faultDialog(f));
+    if(!f) return;
+    if(f.code === 'stage_timeout'){ abortDialog({id:f.id, seq:f.seq, stage:f.stage, sid:f.sid}); return; }   /* 해제 없음 — 서버 409 */
+    ask(faultDialog(f));
   },
   abortFault: function(id){
     var f = S.faults.filter(function(x){ return x.id === id; })[0];
