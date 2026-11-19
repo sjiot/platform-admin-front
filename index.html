@@ -382,8 +382,8 @@ async function api(method, path, body){
 /* ===================== 상수 ===================== */
 var LOW_AT = 6;                         /* 이 개수 이하면 부족 */
 var KEYCAP_MAX_FALLBACK = 30, BOARD_MAX_FALLBACK = 20;
-var PAPER_MAX_FALLBACK = 900;           /* config.PAPER_MAX_COUNT — GET /admin/paper 가 max 를 주면 그 값을 쓴다 */
-var PAPER_LOW_RATIO = 0.12;             /* 남은 용지가 최대치의 12% 이하면 부족 (900매 기준 108매) */
+var PAPER_MAX_FALLBACK = 200;           /* config.PAPER_MAX_COUNT — GET /admin/paper 가 max 를 주면 그 값을 쓴다 */
+var PAPER_LOW_RATIO = 0.12;             /* 남은 용지가 최대치의 12% 이하면 부족 (200매 기준 24매) */
 var CNAME = {r:'레드', y:'옐로', g:'그린', b:'블루'};
 var CHEX  = {r:'#e0443a', y:'#f1c33c', g:'#3ba268', b:'#3b76e8'};
 var CFG   = {r:'#fff', y:'#4a3a05', g:'#fff', b:'#fff'};
@@ -501,7 +501,7 @@ function fmtWhen(iso){ return iso && iso.length >= 16 ? iso.slice(5, 10).replace
 function localIso(){ var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + 'T' + p2(d.getHours()) + ':' + p2(d.getMinutes()); }
 
 /* 용지 마지막 채움 시각·내역은 서버에 없어서 프론트 기준으로 이 브라우저에 저장한다 (다른 PC에서 채운 건 모른다).
-   최대치는 PAPER_MAX_FALLBACK(900). 서버가 max·refilled_at 을 주기 시작하면 그 값이 우선한다. */
+   최대치는 PAPER_MAX_FALLBACK(200). 서버가 max·refilled_at 을 주기 시작하면 그 값이 우선한다. */
 var PAPER_STORE_KEY = 'sjiot-admin:paper';
 function paperStoreLoad(){
   try {
@@ -1236,7 +1236,7 @@ function viewGuide(){
   '<h2>연동되지 않은 것</h2>' +
   '<ul>' +
     '<li><b>영수증 출력</b> — 프린터로 출력 명령을 보내는 API가 없습니다. 영수증 창의 출력 버튼은 꺼 두었습니다. (용지 잔량은 연동됨 — 아래 표시 규칙)</li>' +
-    '<li><b>용지 최대치 · 마지막 채움 시각</b> — 서버에 없어 프론트 기준으로 둡니다. 최대치는 900매 고정, 마지막 채움 시각과 채움 내역은 이 브라우저에 저장합니다 (다른 PC에서 채운 건 모릅니다). 서버가 <code>max</code>·<code>refilled_at</code>을 주기 시작하면 그 값이 우선합니다.</li>' +
+    '<li><b>용지 최대치 · 마지막 채움 시각</b> — 최대치는 서버 <code>GET /admin/paper</code>의 <code>max</code>(env <code>PAPER_MAX_COUNT</code>, 기본 200)를 씁니다. 마지막 채움 시각과 채움 내역은 서버에 없어 이 브라우저에 저장합니다 (다른 PC에서 채운 건 모릅니다). 서버가 <code>refilled_at</code>을 주기 시작하면 그 값이 우선합니다.</li>' +
     '<li><b>AGV 긴급정지</b> — AGV로 정지 명령을 보내는 경로가 없습니다. 눌러도 아무 일이 안 일어나는 비상 버튼은 위험해서 비활성으로 두었습니다.</li>' +
     '<li><b>테스트 fault 주입 · 전체 해제</b> — API가 없어 뺐습니다.</li>' +
     '<li><b>진행 주문 없이 죽은 칸·선반</b> — fault가 주문에 붙는 구조라 표시되지 않습니다.</li>' +
@@ -1252,7 +1252,7 @@ function viewGuide(){
     '<li><b>종료·중단된 주문의 fault</b>는 창고 상태 탭에 나오지 않습니다. 기록이라 해제할 것이 없고, 주문 탭 상세에서 볼 수 있습니다.</li>' +
     '<li><b>재고를 채워도 fault는 남습니다.</b> 소진으로 멈춘 주문이 있으면 채운 뒤 이어서 fault 해제 확인 창이 뜹니다.</li>' +
     '<li><b>고장(disable) 칸</b>은 창고 재고 탭에서 빨간 테두리로 보입니다. 누르면 idle 로 되돌리고(수량 유지) 그 칸을 기다리던 주문을 다시 배정합니다 🔒. 창고가 다시 disable 을 보고하면 다시 고장으로 돌아옵니다.</li>' +
-    '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(900) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(108매)면 부족으로 표시합니다.</li>' +
+    '<li><b>영수증 용지</b>는 프린터 센서 값이 아니라 <code>최대치(200) − 마지막 채우기 이후 접수된 주문 수</code>입니다 (주문 1건 = 1매, 차감은 <code>POST /order</code>). 접수 실패(대기열 가득·접수 마감)는 빼고 중단·노쇼는 셉니다. <code>/admin/reset</code>을 해도 유지됩니다. 최대치의 12% 이하(24매)면 부족으로 표시합니다.</li>' +
   '</ul>' +
 
   '<h2>fault ↔ 위치</h2>' +
