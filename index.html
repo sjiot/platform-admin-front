@@ -478,7 +478,8 @@ var S = {
   query:'', filter:'전체', sel:[], detailId:null, detailEnter:false, receiptId:null,
   dialog:null,
   reset:{mode:'zero', keep_queue:false, confirm:''}, resetResult:null,
-  snap:null, snapBusy:false, snapMobius:false
+  snap:null, snapBusy:false, snapMobius:false,
+  stats:null, statsBusy:false          /* GET /dashboard/statistics · {total, counts:{ENTP:3,…}, at} */
 };
 
 /* ===================== 유틸 ===================== */
@@ -697,8 +698,34 @@ async function loadPaper(){
   S.paper.refilledAt = d.refilled_at || null;                    /* 서버가 아직 안 주면 이 브라우저에서 채운 시각만 보인다 */
 }
 
+/* MBTI 16개 — config.MBTI_AXES 순서 (E/I · S/N · T/F · J/P) */
+var MBTI_ALL = ['EI','SN','TF','JP'].reduce(function(acc, ax){
+  return acc.length ? [].concat.apply([], acc.map(function(p){ return [p + ax[0], p + ax[1]]; })) : [ax[0], ax[1]];
+}, []);
+
+/* /dashboard/statistics 는 전시 기간 아카이브를 날짜마다 hgetall 해서 무겁다 → 폴링(SOURCES)에 넣지 않고
+   MBTI 탭에 들어올 때와 새로고침 버튼으로만 읽는다. 서버는 keycap 을 접수된 대소문자 그대로 세므로 대문자로 합친다. */
+async function loadStats(){
+  var d = await api('GET', '/dashboard/statistics');
+  var counts = {};
+  (d && Array.isArray(d.mbti_stats) ? d.mbti_stats : []).forEach(function(x){
+    var k = String(x.mbti || '').toUpperCase();
+    if(MBTI_ALL.indexOf(k) < 0) return;
+    counts[k] = (counts[k] || 0) + (Number(x.count) || 0);
+  });
+  S.stats = {total: d && typeof d.completed_orders === 'number' ? d.completed_orders : 0, counts: counts, at: localIso()};
+}
+async function reloadStats(){
+  if(S.statsBusy) return;
+  S.statsBusy = true; renderMain();
+  try { await loadStats(); S.err.stats = null; }
+  catch(e){ S.err.stats = e.message; }
+  S.statsBusy = false;
+  renderHeader(); renderMain();
+}
+
 var SOURCES = {orders:loadOrders, stations:loadStations, calls:loadCalls, stock:loadStock, faults:loadFaults, line:loadLine, paper:loadPaper};
-var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','orders','stock'], paper:['paper'], ops:['line'], guide:[]};
+var TAB_SOURCES = {orders:['orders'], stations:['stations','calls'], stock:['stock','faults'], wh:['faults','orders','stock'], paper:['paper'], mbti:[], ops:['line'], guide:[]};
 var HEADER_SOURCES = ['calls','line','stock','paper'];
 var refreshing = false;
 
@@ -733,7 +760,8 @@ var TABS = [
   {id:'stock',    label:'창고 재고'},
   {id:'wh',       label:'창고 상태'},
   {id:'paper',    label:'영수증 용지'},
-  {id:'ops',      label:'운영'},
+  {id:'mbti',     label:'MBTI 순위'},
+  {id:'ops',     label:'운영'},
   {id:'guide',    label:'연동 현황'}
 ];
 function tabCount(id){
@@ -1124,6 +1152,44 @@ function viewPaper(){
     logCard + '</div>';
 }
 
+/* ===================== MBTI 순위 ===================== */
+/* 16개 전부 · 건수 내림차순 · 같은 건수는 같은 순위 (1, 2, 2, 4) */
+function rankMbti(counts){
+  var rows = MBTI_ALL.map(function(m){ return {mbti:m, count:counts[m] || 0}; });
+  rows.sort(function(a, b){ return b.count - a.count || (a.mbti < b.mbti ? -1 : 1); });
+  rows.forEach(function(r, i){ r.rank = (i > 0 && rows[i - 1].count === r.count) ? rows[i - 1].rank : i + 1; });
+  rows.forEach(function(r){ r.tied = rows.filter(function(x){ return x.count === r.count; }).length > 1; });
+  return rows;
+}
+function viewMbti(){
+  var st = S.stats;
+  var btn = '<button class="btn" data-act="stats-refresh" type="button"' + (S.statsBusy ? ' disabled' : '') + '>' + (S.statsBusy ? '불러오는 중…' : '새로고침') + '</button>';
+  var head = '<div class="sechead"><h2>MBTI 순위</h2><span class="note">' +
+    (st ? '정상 완료 ' + st.total + '건 기준 · ' + fmtWhen(st.at) + ' 조회' : '전시 기간 정상 완료 주문 기준') + '</span></div>';
+  if(!st){
+    return '<div class="wrap" style="max-width:900px">' + errBox(['stats']) + head +
+      '<div class="empty">' + (S.err.stats ? '통계를 읽지 못했습니다.' : '불러오는 중…') + '</div>' +
+      '<div class="toolbar">' + btn + '</div></div>';
+  }
+  var rows = rankMbti(st.counts), top = rows[0].count;
+  var body = rows.map(function(r){
+    var ratio = st.total > 0 ? Math.round(r.count / st.total * 1000) / 10 : 0;
+    var bar = top > 0 ? Math.round(r.count / top * 100) : 0;
+    return '<tr' + (r.count ? '' : ' style="color:var(--faint)"') + '>' +
+      '<td class="mono" style="width:90px;font-weight:600">' + (st.total > 0 ? r.rank + '위' + (r.tied ? ' <span style="font-weight:400;color:var(--faint);font-size:11px">공동</span>' : '') : '-') + '</td>' +
+      '<td class="mono" style="width:90px;font-weight:700">' + r.mbti + '</td>' +
+      '<td class="mono" style="width:80px;text-align:right">' + r.count + '건</td>' +
+      '<td class="mono" style="width:80px;text-align:right">' + ratio.toFixed(1) + '%</td>' +
+      '<td><div class="meter" style="height:8px"><i style="width:' + bar + '%;background:var(--primary)"></i></div></td></tr>';
+  }).join('');
+  return '<div class="wrap" style="max-width:900px">' + errBox(['stats']) + head +
+    (st.total > 0 ? '' : '<div class="empty" style="padding:14px">아직 정상 완료된 주문이 없습니다.</div>') +
+    '<div class="card tablebox"><table style="min-width:520px"><thead><tr><th>순위</th><th>MBTI</th><th style="text-align:right">건수</th><th style="text-align:right">비율</th><th></th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+    '<div class="toolbar">' + btn + '</div>' +
+    '<p style="margin:0;font-size:12px;color:var(--muted);max-width:640px">전시 기간에 <b>정상 완료</b>된 주문만 셉니다 (미수령·타임아웃 제외). 비율 = 건수 ÷ 정상 완료 주문 수. 같은 건수는 같은 순위입니다. 서버 부담이 커서 자동으로 갱신하지 않습니다 — 탭에 들어올 때와 새로고침 버튼을 누를 때만 읽습니다.</p>' +
+    '</div>';
+}
+
 /* ===================== 탭 6: 운영 (영업 상태 · 리셋 · 스냅샷) ===================== */
 var RESET_DESC = {
   zero:   ['zero', '디버깅 라운드 사이', '상태·진행 중 주문·대기열을 지우고 재고를 칸별 최대치(키캡 40 · 보드 3)로 채웁니다. 아카이브·일련번호는 남습니다.'],
@@ -1224,6 +1290,7 @@ function viewGuide(){
     ['창고 재고', 'GET /admin/stock', 'POST /admin/stock/refill · POST /admin/stock/revive 🔒 (고장 칸 해제)'],
     ['창고 상태', 'GET /admin/faults · GET /admin/stock', 'POST /admin/order/&lt;id&gt;/fault/clear 🔒 · abort 🔒 · POST /admin/agv/fault/clear 🔒 · POST /admin/warehouse/fault/clear 🔒'],
     ['영수증 용지', 'GET /admin/paper', 'POST /admin/paper/refill'],
+    ['MBTI 순위', 'GET /dashboard/statistics (자동 갱신 없음)', '-'],
     ['운영', 'GET /admin/line · GET /admin/debug/snapshot', 'POST /admin/line 🔒 · POST /admin/reset 🔒'],
     ['헤더', 'GET /admin/calls · /admin/line · /admin/stock · /admin/paper', '영업 상태 칩 → POST /admin/line 🔒']
   ].map(function(r){ return '<tr><td style="font-weight:600">' + r[0] + '</td><td class="mono" style="font-size:11.5px">' + r[1] + '</td><td class="mono" style="font-size:11.5px">' + r[2] + '</td></tr>'; }).join('');
@@ -1288,7 +1355,7 @@ function renderMain(){
   var a = document.activeElement;
   var fid = a && a.id ? a.id : null;
   var sel = (a && typeof a.selectionStart === 'number') ? a.selectionStart : null;
-  var views = {orders:viewOrders, stations:viewStations, stock:viewStock, wh:viewWarehouse, paper:viewPaper, ops:viewOps, guide:viewGuide};
+  var views = {orders:viewOrders, stations:viewStations, stock:viewStock, wh:viewWarehouse, paper:viewPaper, mbti:viewMbti, ops:viewOps, guide:viewGuide};
   var mainHtml = (views[S.tab] || viewOrders)();
   var asideHtml = (S.tab === 'orders' && S.detailId) ? viewDetail() : '';
   S.detailEnter = false;
@@ -1727,7 +1794,7 @@ document.addEventListener('click', function(ev){
   var no = t.getAttribute('data-no');
   var sid = t.getAttribute('data-sid');
 
-  if(act === 'tab'){ S.tab = t.getAttribute('data-v'); render(); document.getElementById('main').scrollTop = 0; refresh(0); return; }
+  if(act === 'tab'){ S.tab = t.getAttribute('data-v'); render(); document.getElementById('main').scrollTop = 0; refresh(0); if(S.tab === 'mbti') reloadStats(); return; }
   if(act === 'filter'){ S.filter = t.getAttribute('data-v'); render(); return; }
   if(act === 'line-chip'){ if(S.line) ASK.line(S.line.status === 'open' ? 'closed' : 'open'); return; }
 
@@ -1761,6 +1828,9 @@ document.addEventListener('click', function(ev){
 
   /* 용지 */
   if(act === 'fill-paper'){ ASK.fillPaper(); return; }
+
+  /* MBTI 순위 */
+  if(act === 'stats-refresh'){ reloadStats(); return; }
 
   /* 창고 상태 */
   if(act === 'locate-part'){
